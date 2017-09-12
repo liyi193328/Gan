@@ -8,6 +8,7 @@ import numpy as np
 import codecs
 import tensorflow as tf
 
+import utils
 import argparse
 import numpy as np
 from scipy.stats import norm
@@ -116,7 +117,7 @@ def optimizer(loss, var_list, num_epochs):
 
 class DataSet:
     
-    def __init__(self, path, batch_size, shuffle=True, onepass=False):
+    def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
         data = pd.read_csv(path, sep=" ", header=None).transpose()
         self.data = data
         self.samples, self.feature_nums = data.shape
@@ -126,13 +127,20 @@ class DataSet:
         self.onepass = onepass
 
     def next(self):
-        feature_nums, batch_size = self.feature_nums, self.batch_size
+        batch_size = self.batch_size
+
+        if self.cnt >= self.samples and self.onepass is True: #for infer mode
+            return None
+
         if self.cnt + batch_size >= self.samples:
             if self.onepass: # if last pass piece, make batch_data
                 batch_data = self.data[self.cnt:]
+                self.cnt = self.samples
                 return batch_data
+
             self.cnt = 0
             self.shuffle_data()
+
         be, en = self.cnt, min(self.samples, self.cnt + batch_size)
 #         yield data[be, en]
         batch_data = self.data[be : en]
@@ -180,8 +188,7 @@ class GAN(object):
     def __init__(self, config, mlp_hidden_size=2000, lam=0.1):
 
         self.config = config
-        self.dataset = DataSet(config.path, config.batch_size)
-        self.feature_nums =self.dataset.feature_nums
+        self.feature_nums =self.config.feature_nums
         self.steps = config.steps
         self.log_every = 10
         self.mlp_hidden_size = mlp_hidden_size
@@ -194,6 +201,7 @@ class GAN(object):
 
         self.saver = tf.train.Saver(max_to_keep=1)
 
+        self.is_training = tf.placeholder(tf.bool, name="is_trainging")
         # This defines the generator network - it takes samples from a noise
         # distribution as input, and passes them through an MLP.
         with tf.variable_scope('G'):
@@ -245,12 +253,13 @@ class GAN(object):
     def train(self):
 
         config = self.config
+        dataset = DataSet(config.path, config.batch_size)
+
         samples = np.random.normal(config.random_sample_mu, config.random_sample_sigma,
                                         (config.batch_size, self.feature_nums))
 
         with tf.Session() as session:
 
-            self.sess = session
             tf.global_variables_initializer().run()
 
             self.g_sum = tf.summary.merge(
@@ -262,11 +271,11 @@ class GAN(object):
 
             for step in range(self.steps):
                 
-                batch_data = self.dataset.next()
+                batch_data = dataset.next()
 
                 sz = len(batch_data)
                 random_data = np.random.normal(config.random_sample_mu, config.random_sample_sigma,
-                                                 (sz, self.dataset.feature_nums))
+                                                 (sz, self.feature_nums))
 
                 loss_d, _ , d_summary_str = session.run([self.loss_d, self.opt_d, self.d_sum], {
                     self.x: batch_data,
@@ -284,15 +293,82 @@ class GAN(object):
                 if step % self.log_every == 0:
                     print('{}: {}\t{}'.format(step, loss_d, loss_g))
 
-    def complete(self):
-        config = self.config
+    def complete(self, config):
+
         try:
             tf.global_variables_initializer().run()
         except:
             tf.initialize_all_variables().run()
 
-        isLoaded = self.load(self.config.checkpoint_dir)
+        isLoaded = self.load(config.checkpoint_dir)
         assert(isLoaded)
+
+        dataset = DataSet(config.path, batch_size=config.batch_size, onepass=True)
+
+        missing_val = config.missing_val
+        with tf.Session() as sess:
+
+            while(1):
+                batch_data = dataset.next()
+                data_shape = np.shape(batch_data)
+                batch_size, feature_nums = data_shape
+
+                if batch_data is None:
+                    break
+                batch_mask = utils.MaskData(batch_data, missing_val)
+
+                mask_data = np.multiply(batch_data, batch_mask)
+
+                zhats = np.random.uniform(-1, 1, size=data_shape)
+
+                for i in range(config.nIter):
+                    fd = {
+                        self.z: zhats,
+                        self.mask: batch_mask,
+                        self.x: batch_data,
+                        self.is_training: False
+                    }
+                    run = [self.complete_loss, self.grad_complete_loss, self.G]
+                    loss, g, G_data = sess.run(run, feed_dict=fd)
+
+                    if i % config.outInterval == 0:
+                        inv_masked_hat_data = np.multiply(G_data, 1.0 - mask_data)
+                        completed = mask_data + inv_masked_hat_data
+                        # pd.to_csv("")
+
+                    if config.approach == 'adam':
+                        # Optimize single completion with Adam
+                        m_prev = np.copy(m)
+                        v_prev = np.copy(v)
+                        m = config.beta1 * m_prev + (1 - config.beta1) * g[0]
+                        v = config.beta2 * v_prev + (1 - config.beta2) * np.multiply(g[0], g[0])
+                        m_hat = m / (1 - config.beta1 ** (i + 1))
+                        v_hat = v / (1 - config.beta2 ** (i + 1))
+                        zhats += - np.true_divide(config.lr * m_hat, (np.sqrt(v_hat) + config.eps))
+                        zhats = np.clip(zhats, -1, 1)
+
+                    elif config.approach == 'hmc':
+                        # Sample example completions with HMC (not in paper)
+                        zhats_old = np.copy(zhats)
+                        loss_old = np.copy(loss)
+                        v = np.random.randn(batch_size, feature_nums)
+                        v_old = np.copy(v)
+
+                        for steps in range(config.hmcL):
+                            v -= config.hmcEps/2 * config.hmcBeta * g[0]
+                            zhats += config.hmcEps * v
+                            np.copyto(zhats, np.clip(zhats, -1, 1))
+                            loss, g, _, _ = self.sess.run(run, feed_dict=fd)
+                            v -= config.hmcEps/2 * config.hmcBeta * g[0]
+
+                        for img in range(batch_size):
+                            logprob_old = config.hmcBeta * loss_old[img] + np.sum(v_old[img]**2)/2
+                            logprob = config.hmcBeta * loss[img] + np.sum(v[img]**2)/2
+                            accept = np.exp(logprob_old - logprob)
+                            if accept < 1 and np.random.uniform() > accept:
+                                np.copyto(zhats[img], zhats_old[img])
+
+                        config.hmcBeta *= config.hmcAnneal
 
     def save(self, checkpoint_dir, step):
         if not os.path.exists(checkpoint_dir):
@@ -319,13 +395,13 @@ if __name__ == "__main__":
     flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
     flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
     flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
-    flags.DEFINE_integer("image_size", 64, "The size of image to use")
-    flags.DEFINE_string("dataset", "lfw-aligned-64", "Dataset directory.")
+    flags.DEFINE_integer("feature_nums",5543, "The size of image to use")
+    flags.DEFINE_string("path", "lfw-aligned-64", "Dataset directory.")
     flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
     flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
     FLAGS = flags.FLAGS
     tf.reset_default_graph()
-    model = GAN()
+    model = GAN(FLAGS)
     model.train()
 
 
