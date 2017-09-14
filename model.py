@@ -24,6 +24,16 @@ seed = 42
 np.random.seed(seed)
 tf.set_random_seed(seed)
 
+flags = tf.app.flags
+flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
+flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
+flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
+flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
+flags.DEFINE_integer("feature_nums",5543, "The size of image to use")
+flags.DEFINE_string("datapath", "./", "Dataset directory.")
+flags.DEFINE_string("comple_data_path", )
+flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
+FLAGS = flags.FLAGS
 
 def mlp(input, h_dim):
     init_const = tf.constant_initializer(0.0)
@@ -96,10 +106,9 @@ def discriminator(input, h_dim):
 
 # In[16]:
 
-def optimizer(loss, var_list, num_epochs):
+def optimizer(loss, var_list, num_decay_steps = 1000):
     initial_learning_rate = 0.01
     decay = 0.95
-    num_decay_steps = num_epochs // 4
     batch = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(
         initial_learning_rate,
@@ -150,6 +159,10 @@ class DataSet:
     def shuffle_data(self):
         np.random.shuffle(self.data)
 
+    @property
+    def steps(self):
+        return self.samples // self.batch_size
+
 anim_frames = []
 
 def plot_distributions(GAN, session, loss_d, loss_g):
@@ -183,17 +196,14 @@ def plot_distributions(GAN, session, loss_d, loss_g):
 
 
 
-class GAN(object):
+class DCGAN(object):
 
-    def __init__(self, config, mlp_hidden_size=2000, lam=0.1):
+    def __init__(self, feature_nums, mlp_hidden_size=2000, lam=0.1):
 
-        self.config = config
-        self.feature_nums =self.config.feature_nums
-        self.steps = config.steps
+        self.feature_nums = feature_nums
         self.log_every = 10
         self.mlp_hidden_size = mlp_hidden_size
         self._create_model()
-        self.sess = None
         self.model_name = "DCGAN.model"
         self.lam = lam
 
@@ -238,8 +248,8 @@ class GAN(object):
         self.g_loss_sum = tf.summary.scalar("g_loss", self.loss_g)
         self.d_loss_sum = tf.summary.scalar("d_loss", self.loss_d)
 
-        self.opt_d = optimizer(self.loss_d, self.theta_d2, self.config.steps)
-        self.opt_g = optimizer(self.loss_g, theta_g, self.config.steps)
+        self.opt_d = optimizer(self.loss_d, self.theta_d2)
+        self.opt_g = optimizer(self.loss_g, theta_g)
 
         # Completion.
         self.mask = tf.placeholder(tf.float32, [None, self.feature_nums], name='mask')
@@ -250,10 +260,11 @@ class GAN(object):
         self.complete_loss = self.contextual_loss + self.lam * self.perceptual_loss
         self.grad_complete_loss = tf.gradients(self.complete_loss, self.z)
     
-    def train(self):
+    def train(self, config):
 
-        config = self.config
         dataset = DataSet(config.path, config.batch_size)
+
+        steps = dataset.steps * config.epoch
 
         samples = np.random.normal(config.random_sample_mu, config.random_sample_sigma,
                                         (config.batch_size, self.feature_nums))
@@ -267,9 +278,9 @@ class GAN(object):
             self.d_sum = tf.summary.merge(
                 [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
 
-            self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
+            self.writer = tf.summary.FileWriter("./logs", session.graph)
 
-            for step in range(self.steps):
+            for step in range(steps):
                 
                 batch_data = dataset.next()
 
@@ -293,6 +304,9 @@ class GAN(object):
                 if step % self.log_every == 0:
                     print('{}: {}\t{}'.format(step, loss_d, loss_g))
 
+                if step % config.save_freq_steps == 0:
+                    self.save(session, config.checkpoint_dir, step)
+
     def complete(self, config):
 
         try:
@@ -300,26 +314,32 @@ class GAN(object):
         except:
             tf.initialize_all_variables().run()
 
-        isLoaded = self.load(config.checkpoint_dir)
-        assert(isLoaded)
-
-        dataset = DataSet(config.path, batch_size=config.batch_size, onepass=True)
+        dataset = DataSet(config.datapath, batch_size=config.batch_size, onepass=True)
 
         missing_val = config.missing_val
+
+        complete_datas = []
+        feature_nums = 5543
+
         with tf.Session() as sess:
+
+            isLoaded = self.load(sess, config.checkpoint_dir)
+            assert (isLoaded)
+
+            m = 0
+            v = 0
 
             while(1):
                 batch_data = dataset.next()
                 data_shape = np.shape(batch_data)
-                batch_size, feature_nums = data_shape
+                sample_size, feature_nums = data_shape
 
                 if batch_data is None:
                     break
                 batch_mask = utils.MaskData(batch_data, missing_val)
-
                 mask_data = np.multiply(batch_data, batch_mask)
-
                 zhats = np.random.uniform(-1, 1, size=data_shape)
+                completed = batch_data
 
                 for i in range(config.nIter):
                     fd = {
@@ -334,7 +354,6 @@ class GAN(object):
                     if i % config.outInterval == 0:
                         inv_masked_hat_data = np.multiply(G_data, 1.0 - mask_data)
                         completed = mask_data + inv_masked_hat_data
-                        # pd.to_csv("")
 
                     if config.approach == 'adam':
                         # Optimize single completion with Adam
@@ -351,7 +370,7 @@ class GAN(object):
                         # Sample example completions with HMC (not in paper)
                         zhats_old = np.copy(zhats)
                         loss_old = np.copy(loss)
-                        v = np.random.randn(batch_size, feature_nums)
+                        v = np.random.randn(sample_size, feature_nums)
                         v_old = np.copy(v)
 
                         for steps in range(config.hmcL):
@@ -361,47 +380,41 @@ class GAN(object):
                             loss, g, _, _ = self.sess.run(run, feed_dict=fd)
                             v -= config.hmcEps/2 * config.hmcBeta * g[0]
 
-                        for img in range(batch_size):
-                            logprob_old = config.hmcBeta * loss_old[img] + np.sum(v_old[img]**2)/2
-                            logprob = config.hmcBeta * loss[img] + np.sum(v[img]**2)/2
+                        for i in range(sample_size):
+                            logprob_old = config.hmcBeta * loss_old[i] + np.sum(v_old[i]**2)/2
+                            logprob = config.hmcBeta * loss[i] + np.sum(v[i]**2)/2
                             accept = np.exp(logprob_old - logprob)
                             if accept < 1 and np.random.uniform() > accept:
-                                np.copyto(zhats[img], zhats_old[img])
+                                np.copyto(zhats[i], zhats_old[i])
 
                         config.hmcBeta *= config.hmcAnneal
 
-    def save(self, checkpoint_dir, step):
+                complete_datas.append(completed)
+
+        complete_datas = np.reshape(np.array(complete_datas), (-1, feature_nums))
+        df = pd.DataFrame(complete_datas)
+        df.to_csv(config.save_complete_path, index=None, header=None)
+        print("save complete data from {} to {}".format(config.datapath, config.save_complete_path))
+
+    def save(self, sess, checkpoint_dir, step):
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
 
-        self.saver.save(self.sess,
+        self.saver.save(sess,
                         os.path.join(checkpoint_dir, self.model_name),
                         global_step=step)
 
-    def load(self, checkpoint_dir):
+    def load(self, sess, checkpoint_dir):
         print(" [*] Reading checkpoints...")
 
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
-            self.saver.restore(self.sess, ckpt.model_checkpoint_path)
+            self.saver.restore(sess, ckpt.model_checkpoint_path)
             return True
         else:
             return False
 
 if __name__ == "__main__":
-    flags = tf.app.flags
-    flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
-    flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
-    flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
-    flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
-    flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
-    flags.DEFINE_integer("feature_nums",5543, "The size of image to use")
-    flags.DEFINE_string("path", "lfw-aligned-64", "Dataset directory.")
-    flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
-    flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
-    FLAGS = flags.FLAGS
-    tf.reset_default_graph()
-    model = GAN(FLAGS)
-    model.train()
-
+    model = DCGAN(FLAGS.feature_nums)
+    model.train(FLAGS)
 
