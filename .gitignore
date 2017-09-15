@@ -98,3 +98,5 @@ ENV/
 .idea
 .ipynb_checkpoints/
 reprocess.txt
+infer_data.csv
+train_data.csv

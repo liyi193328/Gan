@@ -30,9 +30,12 @@ flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]"
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
 flags.DEFINE_integer("feature_nums",5543, "The size of image to use")
-flags.DEFINE_string("datapath", "./", "Dataset directory.")
-flags.DEFINE_string("comple_data_path", )
+flags.DEFINE_string("train_datapath", "./train_data.csv", "Dataset directory.")
+flags.DEFINE_string("infer_complete_datapath", "infer_complete_data.csv", "path of infer complete path")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
+flags.DEFINE_float("random_sample_mu",0.0,"random mu")
+flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
+flags.DEFINE_integer("save_freq_steps", 100, "save freq steps")
 FLAGS = flags.FLAGS
 
 def mlp(input, h_dim):
@@ -127,7 +130,7 @@ def optimizer(loss, var_list, num_decay_steps = 1000):
 class DataSet:
     
     def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
-        data = pd.read_csv(path, sep=" ", header=None).transpose()
+        data = pd.read_csv(path, sep=",", header=None)
         self.data = data
         self.samples, self.feature_nums = data.shape
         self.cnt = 0
@@ -203,13 +206,11 @@ class DCGAN(object):
         self.feature_nums = feature_nums
         self.log_every = 10
         self.mlp_hidden_size = mlp_hidden_size
-        self._create_model()
-        self.model_name = "DCGAN.model"
         self.lam = lam
+        self.model_name = "DCGAN.model"
+        self._create_model()
 
     def _create_model(self):
-
-        self.saver = tf.train.Saver(max_to_keep=1)
 
         self.is_training = tf.placeholder(tf.bool, name="is_trainging")
         # This defines the generator network - it takes samples from a noise
@@ -232,7 +233,7 @@ class DCGAN(object):
 
         self.d_sum = tf.summary.histogram("d1", self.D1)
         self.d__sum = tf.summary.histogram("d_", self.D2)
-        self.G_sum = tf.summary.image("G", self.G)
+        self.G_sum = tf.summary.histogram("G", self.G)
 
         # Define the loss for discriminator and generator networks (see the original
         # paper for details), and create optimizers for both
@@ -251,6 +252,8 @@ class DCGAN(object):
         self.opt_d = optimizer(self.loss_d, self.theta_d2)
         self.opt_g = optimizer(self.loss_g, theta_g)
 
+        self.saver = tf.train.Saver(max_to_keep=1)
+
         # Completion.
         self.mask = tf.placeholder(tf.float32, [None, self.feature_nums], name='mask')
         self.contextual_loss = tf.reduce_sum(
@@ -262,7 +265,7 @@ class DCGAN(object):
     
     def train(self, config):
 
-        dataset = DataSet(config.path, config.batch_size)
+        dataset = DataSet(config.train_datapath, config.batch_size)
 
         steps = dataset.steps * config.epoch
 
@@ -307,6 +310,7 @@ class DCGAN(object):
                 if step % config.save_freq_steps == 0:
                     self.save(session, config.checkpoint_dir, step)
 
+
     def complete(self, config):
 
         try:
@@ -314,7 +318,7 @@ class DCGAN(object):
         except:
             tf.initialize_all_variables().run()
 
-        dataset = DataSet(config.datapath, batch_size=config.batch_size, onepass=True)
+        dataset = DataSet(config.infer_complete_datapath, batch_size=config.batch_size, onepass=True)
 
         missing_val = config.missing_val
 
@@ -377,7 +381,7 @@ class DCGAN(object):
                             v -= config.hmcEps/2 * config.hmcBeta * g[0]
                             zhats += config.hmcEps * v
                             np.copyto(zhats, np.clip(zhats, -1, 1))
-                            loss, g, _, _ = self.sess.run(run, feed_dict=fd)
+                            loss, g, _, _ = sess.run(run, feed_dict=fd)
                             v -= config.hmcEps/2 * config.hmcBeta * g[0]
 
                         for i in range(sample_size):
