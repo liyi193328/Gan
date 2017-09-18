@@ -8,6 +8,7 @@ import numpy as np
 import codecs
 import tensorflow as tf
 
+import shutil
 import utils
 import argparse
 import numpy as np
@@ -18,25 +19,9 @@ from matplotlib import animation, rc
 import seaborn as sns
 from IPython.display import HTML
 
-
-
 seed = 42
 np.random.seed(seed)
 tf.set_random_seed(seed)
-
-flags = tf.app.flags
-flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
-flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
-flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
-flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
-flags.DEFINE_integer("feature_nums",5543, "The size of image to use")
-flags.DEFINE_string("train_datapath", "./train_data.csv", "Dataset directory.")
-flags.DEFINE_string("infer_complete_datapath", "infer_complete_data.csv", "path of infer complete path")
-flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
-flags.DEFINE_float("random_sample_mu",0.0,"random mu")
-flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
-flags.DEFINE_integer("save_freq_steps", 100, "save freq steps")
-FLAGS = flags.FLAGS
 
 def mlp(input, h_dim):
     init_const = tf.constant_initializer(0.0)
@@ -130,15 +115,20 @@ def optimizer(loss, var_list, num_decay_steps = 1000):
 class DataSet:
     
     def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
-        data = pd.read_csv(path, sep=",", header=None)
+        print("make dataset from {}...".format(path))
+        data = pd.read_csv(path, sep=",", header=None).values
         self.data = data
         self.samples, self.feature_nums = data.shape
         self.cnt = 0
+        self.batch_counter = 0
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.onepass = onepass
+        print("batch_size is {}, have {} samples, {} features, step nums is {}".format(batch_size, self.samples, self.feature_nums, self.steps))
+        print("make dataset end")
 
     def next(self):
+
         batch_size = self.batch_size
 
         if self.cnt >= self.samples and self.onepass is True: #for infer mode
@@ -148,6 +138,7 @@ class DataSet:
             if self.onepass: # if last pass piece, make batch_data
                 batch_data = self.data[self.cnt:]
                 self.cnt = self.samples
+                print("the last batch, shape is {}...".format(batch_data.shape))
                 return batch_data
 
             self.cnt = 0
@@ -157,6 +148,8 @@ class DataSet:
 #         yield data[be, en]
         batch_data = self.data[be : en]
         self.cnt = (self.cnt + batch_size) % self.samples
+        self.batch_counter += 1
+        print("getting {}th batch end".format(self.batch_counter))
         return batch_data
 
     def shuffle_data(self):
@@ -272,7 +265,13 @@ class DCGAN(object):
         samples = np.random.normal(config.random_sample_mu, config.random_sample_sigma,
                                         (config.batch_size, self.feature_nums))
 
+
         with tf.Session() as session:
+
+            if config.load_checkpoint and os.path.exists(config.checkpoint_dir):
+                self.load(session, config.checkpoint_dir)
+            elif os.path.exists(config.checkpoint_dir):
+                shutil.rmtree(config.checkpoint_dir)
 
             tf.global_variables_initializer().run()
 
@@ -296,13 +295,13 @@ class DCGAN(object):
                     self.z: random_data
                 })
 
-                self.writer.add_summary(d_summary_str)
+                self.writer.add_summary(d_summary_str, steps)
 
                 # update generator
                 loss_g, _ , g_summary_str = session.run([self.loss_g, self.opt_g, self.g_sum], {
                     self.z: random_data
                 })
-                self.writer.add_summary(g_summary_str)
+                self.writer.add_summary(g_summary_str, steps)
 
                 if step % self.log_every == 0:
                     print('{}: {}\t{}'.format(step, loss_d, loss_g))
@@ -313,37 +312,37 @@ class DCGAN(object):
 
     def complete(self, config):
 
-        try:
-            tf.global_variables_initializer().run()
-        except:
-            tf.initialize_all_variables().run()
-
         dataset = DataSet(config.infer_complete_datapath, batch_size=config.batch_size, onepass=True)
 
         missing_val = config.missing_val
 
         complete_datas = []
-        feature_nums = 5543
+        feature_nums = dataset.feature_nums
 
         with tf.Session() as sess:
 
             isLoaded = self.load(sess, config.checkpoint_dir)
             assert (isLoaded)
 
-            m = 0
-            v = 0
+            try:
+                tf.global_variables_initializer().run()
+            except:
+                tf.initialize_all_variables().run()
 
             while(1):
                 batch_data = dataset.next()
+                if batch_data is None:
+                    break
                 data_shape = np.shape(batch_data)
                 sample_size, feature_nums = data_shape
 
-                if batch_data is None:
-                    break
                 batch_mask = utils.MaskData(batch_data, missing_val)
                 mask_data = np.multiply(batch_data, batch_mask)
                 zhats = np.random.uniform(-1, 1, size=data_shape)
                 completed = batch_data
+
+                m = 0
+                v = 0
 
                 for i in range(config.nIter):
                     fd = {
@@ -395,10 +394,13 @@ class DCGAN(object):
 
                 complete_datas.append(completed)
 
-        complete_datas = np.reshape(np.array(complete_datas), (-1, feature_nums))
+        complete_datas = np.reshape(np.concatenate(complete_datas,axis=0), (-1, feature_nums))
         df = pd.DataFrame(complete_datas)
-        df.to_csv(config.save_complete_path, index=None, header=None)
-        print("save complete data from {} to {}".format(config.datapath, config.save_complete_path))
+        if os.path.exists(config.outDir) == False:
+            os.makedirs(config.outDir)
+        outPath = os.path.join(config.outDir, "infer.complete")
+        df.to_csv(outPath, index=None, header=None)
+        print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
 
     def save(self, sess, checkpoint_dir, step):
         if not os.path.exists(checkpoint_dir):
@@ -417,8 +419,3 @@ class DCGAN(object):
             return True
         else:
             return False
-
-if __name__ == "__main__":
-    model = DCGAN(FLAGS.feature_nums)
-    model.train(FLAGS)
-
