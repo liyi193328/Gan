@@ -11,35 +11,37 @@ import numpy as np
 import codecs
 
 
-path = r"/home/bigdata/cwl/data_preprocessed/drop80.csv"
-data = pd.read_csv(path)
-print("read from {} done".format(path))
+train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
+infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
-data = data[data.columns[1:]]
+def handle_data(path, save_path):
 
-data = data.transpose()
+  data = pd.read_csv(path, header=0, sep=",", index_col=0)
+  print("read from {} done".format(path))
+  data = data.transpose()
+  print("{} data_shape is {}".format(path, data.shape))
 
-data_val = data.values
-del data
+  data_val = data.values
+  del data
+  row_sum = np.sum(data_val, axis=1)
+  row_sum = np.expand_dims(row_sum, 1)
 
-row_sum = np.sum(data_val, axis=1)
-row_sum = np.expand_dims(row_sum, 1)
+  div = np.divide(data_val , row_sum)
+  m, n = np.shape(div)
+  print("begin to loop cal log and mask 0")
+  for i in range(m):
+    for j in range(n):
+      if div[i][j] != 0:
+        div[i][j] = np.log(div[i][j] * 1e6)
+  pd.DataFrame(div).to_csv(save_path, index=False)
 
-div = np.divide(data_val , row_sum)
+  print("save to {}".format(save_path))
 
-del data_val
-del row_sum
+if __name__ == "__main__":
+  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80.train")
+  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80.infer")
 
-# mask = np.ma.masked_where(data_val == 0.0, data_val)
-# data_f = np.multiply(np.log(div), 1 - mask.mask)
 
-train_path = r"/home/bigdata/cwl/data_preprocessed/drop80.train"
-infer_path = r"/home/bigdata/cwl/data_preprocessed/drop80.infer"
-infer_data = div[-1600:,:]
-train_data = div[0:-1600]
-pd.DataFrame(train_data).to_csv(train_path, index=False)
-print("data {} save to {}".format(train_data.shape, train_path))
-pd.DataFrame(infer_data).to_csv(infer_path, index=False)
-print("data {} save to {}".format(infer_data.shape, infer_path))
+
 
 

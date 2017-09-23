@@ -11,7 +11,7 @@ import tensorflow as tf
 from model import DCGAN
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--infer_complete_datapath', default="../data_preprocessed/drop80.infer",type=str)
+parser.add_argument('--infer_complete_datapath', default="./data/drop80.infer",type=str)
 parser.add_argument("--batch_size", default=64, type=int)
 parser.add_argument("--missing_val", default=0, type=float)
 parser.add_argument('--approach', type=str,
@@ -25,17 +25,17 @@ parser.add_argument('--hmcBeta', type=float, default=0.2)
 parser.add_argument('--hmcEps', type=float, default=0.001)
 parser.add_argument('--hmcL', type=int, default=100)
 parser.add_argument('--hmcAnneal', type=float, default=1)
-parser.add_argument('--nIter', type=int, default=10)
+parser.add_argument('--nIter', type=int, default=100)
 parser.add_argument('--imgSize', type=int, default=64)
 parser.add_argument('--lam', type=float, default=0.1)
 parser.add_argument('--checkpoint_dir', type=str, default='checkpoint')
-parser.add_argument('--outDir', type=str, default='../data_preprocessed')
+parser.add_argument('--outDir', type=str, default='./data')
 parser.add_argument('--outInterval', type=int, default=50)
 parser.add_argument('--maskType', type=str,
                     choices=['random', 'center', 'left', 'full', 'grid', 'lowres'],
                     default='center')
 parser.add_argument('--centerScale', type=float, default=0.25)
-parser.add_argument("--feature_nums",type=int, default=11246, help = "The size of image to use")
+parser.add_argument("--feature_nums",type=int, default=13416, help = "The size of image to use")
 
 args = parser.parse_args()
 

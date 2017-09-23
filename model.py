@@ -41,7 +41,8 @@ def generator(input, h_dim, feature_nums):
     w = tf.get_variable('g_w', [h_dim, feature_nums], initializer=init_norm)
     b = tf.get_variable('g_b', [feature_nums], initializer=init_const)
     h = tf.matmul(transform, w) + b
-    return h, params + [w, b]
+    s = tf.sigmoid(h)
+    return s, params + [w, b]
 
 def linear(input, output_dim, scope=None, stddev=1.0):
     with tf.variable_scope(scope or 'linear'):
@@ -116,7 +117,8 @@ class DataSet:
     
     def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
         print("make dataset from {}...".format(path))
-        data = pd.read_csv(path, sep=",", header=None).values
+        data = pd.read_csv(path, sep=",").values
+        self.path = path
         self.data = data
         self.samples, self.feature_nums = data.shape
         self.cnt = 0
@@ -287,8 +289,8 @@ class DCGAN(object):
                 batch_data = dataset.next()
 
                 sz = len(batch_data)
-                random_data = np.random.normal(config.random_sample_mu, config.random_sample_sigma,
-                                                 (sz, self.feature_nums))
+
+                random_data = np.random.normal(0, 1,(sz, self.feature_nums))
 
                 loss_d, _ , d_summary_str = session.run([self.loss_d, self.opt_d, self.d_sum], {
                     self.x: batch_data,
@@ -338,11 +340,12 @@ class DCGAN(object):
 
                 batch_mask = utils.MaskData(batch_data, missing_val)
                 mask_data = np.multiply(batch_data, batch_mask)
-                zhats = np.random.uniform(-1, 1, size=data_shape)
+                zhats = np.random.uniform(0, 1, size=data_shape)
                 completed = batch_data
 
                 m = 0
                 v = 0
+                G_data = None
 
                 for i in range(config.nIter):
                     fd = {
@@ -353,10 +356,6 @@ class DCGAN(object):
                     }
                     run = [self.complete_loss, self.grad_complete_loss, self.G]
                     loss, g, G_data = sess.run(run, feed_dict=fd)
-
-                    if i % config.outInterval == 0:
-                        inv_masked_hat_data = np.multiply(G_data, 1.0 - mask_data)
-                        completed = mask_data + inv_masked_hat_data
 
                     if config.approach == 'adam':
                         # Optimize single completion with Adam
@@ -392,6 +391,8 @@ class DCGAN(object):
 
                         config.hmcBeta *= config.hmcAnneal
 
+                inv_masked_hat_data = np.multiply(G_data, 1.0 - batch_mask)
+                completed = mask_data + inv_masked_hat_data
                 complete_datas.append(completed)
 
         complete_datas = np.reshape(np.concatenate(complete_datas,axis=0), (-1, feature_nums))
@@ -399,7 +400,7 @@ class DCGAN(object):
         if os.path.exists(config.outDir) == False:
             os.makedirs(config.outDir)
         outPath = os.path.join(config.outDir, "infer.complete")
-        df.to_csv(outPath, index=None, header=None)
+        df.to_csv(outPath, index=None)
         print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
 
     def save(self, sess, checkpoint_dir, step):
