@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 from matplotlib import animation, rc
 import seaborn as sns
 from IPython.display import HTML
+from Dataset import DataSet
+from layers import linear
 
 seed = 42
 np.random.seed(seed)
@@ -44,20 +46,6 @@ def generator(input, h_dim, feature_nums):
     # s = tf.sigmoid(h)
     s = tf.tanh(h)
     return s, params + [w, b]
-
-def linear(input, output_dim, scope=None, stddev=1.0):
-    with tf.variable_scope(scope or 'linear'):
-        w = tf.get_variable(
-            'w',
-            [input.get_shape()[1], output_dim],
-            initializer=tf.random_normal_initializer(stddev=stddev)
-        )
-        b = tf.get_variable(
-            'b',
-            [output_dim],
-            initializer=tf.constant_initializer(0.0)
-        )
-        return tf.matmul(input, w) + b
 
 def minibatch(input, num_kernels=5, kernel_dim=3):
     x = linear(input, num_kernels * kernel_dim, scope='minibatch', stddev=0.02)
@@ -114,54 +102,6 @@ def optimizer(loss, var_list, num_decay_steps = 1000):
         var_list=var_list
     )
     return optimizer
-
-class DataSet:
-    
-    def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
-        print("make dataset from {}...".format(path))
-        data = pd.read_csv(path, sep=",").values
-        self.path = path
-        self.data = data
-        self.samples, self.feature_nums = data.shape
-        self.cnt = 0
-        self.batch_counter = 0
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.onepass = onepass
-        print("batch_size is {}, have {} samples, {} features, step nums is {}".format(batch_size, self.samples, self.feature_nums, self.steps))
-        print("make dataset end")
-
-    def next(self):
-
-        batch_size = self.batch_size
-
-        if self.cnt >= self.samples and self.onepass is True: #for infer mode
-            return None
-
-        if self.cnt + batch_size >= self.samples:
-            if self.onepass: # if last pass piece, make batch_data
-                batch_data = self.data[self.cnt:]
-                self.cnt = self.samples
-                print("the last batch, shape is {}...".format(batch_data.shape))
-                return batch_data
-
-            self.cnt = 0
-            self.shuffle_data()
-
-        be, en = self.cnt, min(self.samples, self.cnt + batch_size)
-#         yield data[be, en]
-        batch_data = self.data[be : en]
-        self.cnt = (self.cnt + batch_size) % self.samples
-        self.batch_counter += 1
-        print("getting {}th batch end".format(self.batch_counter))
-        return batch_data
-
-    def shuffle_data(self):
-        np.random.shuffle(self.data)
-
-    @property
-    def steps(self):
-        return self.samples // self.batch_size
 
 anim_frames = []
 
@@ -240,6 +180,7 @@ class DCGAN(object):
 
         self.d_loss_real_sum = tf.summary.scalar("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = tf.summary.scalar("d_loss_fake", self.d_loss_fake)
+
 
         self.loss_d = self.d_loss_real + self.d_loss_fake
         self.loss_g = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_logits, labels=tf.ones_like(self.D2_logits)))
