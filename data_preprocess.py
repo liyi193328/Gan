@@ -28,11 +28,13 @@ def handle_data(path, save_path):
 
   div = np.divide(data_val , row_sum)
   m, n = np.shape(div)
-  print("begin to loop cal log and mask 0")
+  print("begin to loop cal log...")
+
   for i in range(m):
     for j in range(n):
       if div[i][j] != 0:
-        div[i][j] = np.log(div[i][j] * 1e6)
+        div[i][j] = 2.0 * div[i][j] - 1.0
+  # div = 2.0 * div - 1.0
   pd.DataFrame(div).to_csv(save_path, index=False)
 
   print("save to {}".format(save_path))

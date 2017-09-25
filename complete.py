@@ -36,7 +36,7 @@ parser.add_argument('--maskType', type=str,
                     default='center')
 parser.add_argument('--centerScale', type=float, default=0.25)
 parser.add_argument("--feature_nums",type=int, default=13416, help = "The size of image to use")
-
+parser.add_argument("--model_name", type=str, default="tanh-mak-0", help="model name will be loaded")
 args = parser.parse_args()
 
 assert(os.path.exists(args.checkpoint_dir))
