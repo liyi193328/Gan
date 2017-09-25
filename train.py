@@ -37,5 +37,5 @@ flags.DEFINE_boolean("load_checkpoint", False, "if have checkpoint, whether load
 flags.DEFINE_integer("sample_steps", 500, "every sample_steps, will sample the generate mini batch data")
 FLAGS = flags.FLAGS
 
-model = DCGAN(FLAGS.feature_nums, model_name=FLAGS.model_name)
-model.train(FLAGS)
+dc_model = DCGAN(FLAGS.feature_nums, model_name=FLAGS.model_name)
+dc_model.train(FLAGS)
