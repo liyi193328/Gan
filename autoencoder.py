@@ -10,6 +10,7 @@ from Dataset import DataSet
 import layers
 import shutil
 
+
 activation_dict = {
   "tanh":tf.tanh,
   "sigmoid": tf.sigmoid
@@ -17,9 +18,11 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size, learing_rate=0.01, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.01, activation="sigmoid", model_name="auto_encoder"):
 
     self.feature_num = feature_num
+    if hidden_size is None:
+      hidden_size = feature_num // 3
     self.hidden_size = hidden_size
     self.activation = activation_dict[activation]
     self.learning_rate = learing_rate
@@ -34,13 +37,15 @@ class AutoEncoder(object):
 
     # Define loss and optimizer, minimize the squared error
     self.loss = tf.reduce_mean(tf.pow(self.X - self.decoder_out, 2))
+    self.loss_sum = tf.summary.scalar("train_loss",self.loss)
+
     self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
     self.saver = tf.train.Saver(max_to_keep=1)
 
   def encoder(self, input):
 
-    with tf.VariableScope("encoder") as E:
+    with tf.variable_scope("encoder"):
 
       out = layers.linear(input, self.hidden_size)
       encoder_out = self.activation(out)
@@ -49,7 +54,7 @@ class AutoEncoder(object):
 
   def decoder(self, input):
 
-    with tf.VariableScope("decoder") as D:
+    with tf.variable_scope("decoder") as D:
 
       out = layers.linear(input, self.feature_num)
       decoder_out = self.activation(out)
@@ -61,7 +66,11 @@ class AutoEncoder(object):
     dataset = DataSet(config.train_datapath, config.batch_size)
     steps = dataset.steps * config.epoch
     sample_dirs = os.path.join("samples", self.model_name)
+    log_dirs = os.path.join("logs", self.model_name)
 
+    for dir in [sample_dirs, log_dirs]:
+      if os.path.exists(dir) == False:
+        os.makedirs(dir)
 
     with tf.Session() as session:
 
@@ -70,17 +79,21 @@ class AutoEncoder(object):
       elif os.path.exists(config.checkpoint_dir):
         shutil.rmtree(config.checkpoint_dir)
 
+      self.writer = tf.summary.FileWriter(log_dirs, session.graph)
+
       tf.global_variables_initializer().run()
+      merge_sum_op = tf.summary.merge_all()
 
       for step in range(steps):
 
         batch_data = dataset.next()
-        _, loss = session.run([self.optimizer, self.loss], feed_dict={self.X: batch_data})
+        _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss], feed_dict={self.X: batch_data})
+        self.writer.add_summary(summary_str, step)
 
-        if step % config.log_every == 0:
-          print("step {}th, loss: {}".format(loss))
+        if step % config.log_freq_steps == 0:
+          print("step {}th, loss: {}".format(step, loss))
 
-        if step % config.test_freq == 0:
+        if step % config.test_freq_steps == 0:
           predicts = session.run(self.decoder_out, feed_dict={self.X: batch_data})
           sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
           pd.DataFrame(predicts).to_csv(sample_path, index=False, header=None)
