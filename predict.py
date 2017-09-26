@@ -29,17 +29,18 @@ model_class_dict = {
 flags = tf.app.flags
 flags.DEFINE_string("model_class", "autoencoder", "model class[autoencoder|gan]")
 
-flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
-flags.DEFINE_integer("feature_nums",13416, "The size of image to use")
+flags.DEFINE_integer("batch_size", 64, "The size of batch [64]")
+flags.DEFINE_integer("feature_nums",13416, "The size feature")
 flags.DEFINE_string("activation", "sigmoid", "auto encoder activation")
 
-flags.DEFINE_string("infer_complete_datapath", "infer_complete_data.csv", "path of infer complete path")
+flags.DEFINE_string("infer_complete_datapath", "data/drop80.infer", "path of infer complete path")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
-flags.DEFINE_string("model_name", "tanh-mak-0", "model name will make dir on checkpoint_dir")
+flags.DEFINE_string("model_name", "auto_encoder0", "model name will make dir on checkpoint_dir")
+flags.DEFINE_string('outDir', 'data', "output dir")
 
 FLAGS = flags.FLAGS
 
 model_class = model_class_dict[FLAGS.model_class]
 model = model_class(FLAGS.feature_nums, model_name=FLAGS.model_name)
-model.train(FLAGS)
+model.predict(FLAGS)

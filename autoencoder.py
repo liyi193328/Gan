@@ -123,7 +123,7 @@ class AutoEncoder(object):
     df = pd.DataFrame(predict_data)
     if os.path.exists(config.outDir) == False:
       os.makedirs(config.outDir)
-    outPath = os.path.join(config.outDir, "infer.complete")
+    outPath = os.path.join(config.outDir, "{}.infer.complete".format(self.model_name))
     df.to_csv(outPath, index=None)
     print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
 
