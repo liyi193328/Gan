@@ -84,6 +84,10 @@ class AutoEncoder(object):
       tf.global_variables_initializer().run()
       merge_sum_op = tf.summary.merge_all()
 
+      sample_batch = dataset.sample_batch()
+      sample_path = os.path.join(sample_dirs, "{}.sample".format(self.model_name))
+      pd.DataFrame(sample_batch).to_csv(sample_path, index=False)
+
       for step in range(steps):
 
         batch_data = dataset.next()
@@ -94,7 +98,7 @@ class AutoEncoder(object):
           print("step {}th, loss: {}".format(step, loss))
 
         if step % config.test_freq_steps == 0:
-          predicts = session.run(self.decoder_out, feed_dict={self.X: batch_data})
+          predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch})
           sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
           pd.DataFrame(predicts).to_csv(sample_path, index=False, header=None)
 

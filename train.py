@@ -41,7 +41,7 @@ flags.DEFINE_string("model_name", "auto_encoder0", "model name will make dir on 
 flags.DEFINE_float("random_sample_mu",0.0,"random mu")
 flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
 
-flags.DEFINE_integer("test_freq_steps", 10000, "test freq steps")
+flags.DEFINE_integer("test_freq_steps", 2000, "test freq steps")
 flags.DEFINE_integer("save_freq_steps", 1000, "save freq steps")
 flags.DEFINE_integer("log_freq_steps", 10, "log freq steps")
 

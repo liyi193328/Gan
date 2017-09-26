@@ -46,6 +46,10 @@ class DataSet:
     print("getting {}th batch end".format(self.batch_counter))
     return batch_data
 
+  def sample_batch(self):
+    index = np.random.choice(list(range(self.samples)), self.batch_size)
+    return self.data[index]
+
   def shuffle_data(self):
     np.random.shuffle(self.data)
 
