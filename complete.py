@@ -8,7 +8,7 @@ import argparse
 import os
 import tensorflow as tf
 
-from model import DCGAN
+from gan import Gan
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--infer_complete_datapath', default="./data/drop80.infer",type=str)
@@ -41,5 +41,5 @@ args = parser.parse_args()
 
 assert(os.path.exists(args.checkpoint_dir))
 
-dcgan = DCGAN(args.feature_nums)
-dcgan.complete(args)
+model = Gan(args.feature_nums)
+model.complete(args)
