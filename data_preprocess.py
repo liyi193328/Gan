@@ -37,7 +37,7 @@ def handle_data(path, save_path):
   #       div[i][j] = 2.0 * div[i][j] - 1.0
 
   # div = 2.0 * div - 1.0
-  pd.DataFrame(div).to_csv(save_path, index=False, columns=columns)
+  pd.DataFrame(div, columns=columns).to_csv(save_path, index=False)
 
   print("save to {}".format(save_path))
 

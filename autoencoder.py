@@ -97,7 +97,7 @@ class AutoEncoder(object):
         batch_data = dataset.next()
         mask = (batch_data > 0.0)
         mask = np.float32(mask)
-        print(np.shape(mask), mask.dtype)
+        # print(np.shape(mask), mask.dtype)
 
         _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss],
                                            feed_dict={self.X: batch_data,self.mask: mask})
@@ -109,7 +109,7 @@ class AutoEncoder(object):
         if step % config.test_freq_steps == 0:
           predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch, self.mask: sample_mask})
           sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
-          pd.DataFrame(predicts).to_csv(sample_path, index=False, columns=dataset.columns)
+          pd.DataFrame(predicts, columns=dataset.columns).to_csv(sample_path, index=False)
 
         if step % config.save_freq_steps == 0:
           save_dir = os.path.join(config.checkpoint_dir, self.model_name)
@@ -130,10 +130,12 @@ class AutoEncoder(object):
         batch_data = dataset.next()
         if batch_data is None:
           break
-        predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data})
+        mask = (batch_data > 0.0)
+        mask = np.float32(mask)
+        predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask})
         predict_data.append(predicts)
     predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
-    df = pd.DataFrame(predict_data)
+    df = pd.DataFrame(predict_data, columns=dataset.columns)
     if os.path.exists(config.outDir) == False:
       os.makedirs(config.outDir)
     outPath = os.path.join(config.outDir, "{}.infer.complete".format(self.model_name))
