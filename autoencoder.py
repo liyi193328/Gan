@@ -32,8 +32,9 @@ class AutoEncoder(object):
   def _create_model(self):
     # tf Graph input (only pictures)
     self.X = tf.placeholder("float", [None, self.feature_num])
+    self.mask = tf.placeholder("float32", [None, self.feature_num])
     self.encoder_out = self.encoder(self.X)
-    self.decoder_out = self.decoder(self.encoder_out)
+    self.decoder_out = self.decoder(self.encoder_out) * self.mask
 
     # Define loss and optimizer, minimize the squared error
     self.loss = tf.reduce_mean(tf.pow(self.X - self.decoder_out, 2))
@@ -91,7 +92,10 @@ class AutoEncoder(object):
       for step in range(steps):
 
         batch_data = dataset.next()
-        _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss], feed_dict={self.X: batch_data})
+        mask = (batch_data > 0.0)
+        mask = np.float32(mask)
+        _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss],
+                                           feed_dict={self.X: batch_data,self.mask: mask})
         self.writer.add_summary(summary_str, step)
 
         if step % config.log_freq_steps == 0:
