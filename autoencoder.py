@@ -31,8 +31,9 @@ class AutoEncoder(object):
 
   def _create_model(self):
     # tf Graph input (only pictures)
-    self.X = tf.placeholder("float", [None, self.feature_num])
-    self.mask = tf.placeholder("float32", [None, self.feature_num])
+    self.X = tf.placeholder(tf.float32, [None, self.feature_num])
+    self.mask = tf.placeholder(tf.float32, [None, self.feature_num])
+
     self.encoder_out = self.encoder(self.X)
     self.decoder_out = self.decoder(self.encoder_out) * self.mask
 
@@ -86,6 +87,7 @@ class AutoEncoder(object):
       merge_sum_op = tf.summary.merge_all()
 
       sample_batch = dataset.sample_batch()
+      sample_mask = np.float32(sample_batch > 0.0)
       sample_path = os.path.join(sample_dirs, "{}.sample".format(self.model_name))
       pd.DataFrame(sample_batch).to_csv(sample_path, index=False)
 
@@ -94,6 +96,8 @@ class AutoEncoder(object):
         batch_data = dataset.next()
         mask = (batch_data > 0.0)
         mask = np.float32(mask)
+        print(np.shape(mask), mask.dtype)
+
         _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss],
                                            feed_dict={self.X: batch_data,self.mask: mask})
         self.writer.add_summary(summary_str, step)
@@ -102,7 +106,7 @@ class AutoEncoder(object):
           print("step {}th, loss: {}".format(step, loss))
 
         if step % config.test_freq_steps == 0:
-          predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch})
+          predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch, self.mask: sample_mask})
           sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
           pd.DataFrame(predicts).to_csv(sample_path, index=False, header=None)
 

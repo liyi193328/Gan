@@ -9,6 +9,7 @@ class DataSet:
   def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
     print("make dataset from {}...".format(path))
     data = pd.read_csv(path, sep=",").values
+    data = np.float32(data)
     self.path = path
     self.data = data
     self.samples, self.feature_nums = data.shape
