@@ -56,6 +56,7 @@ class AutoEncoder(object):
 
     return decoder_out
 
+
   def train(self, config):
 
     dataset = DataSet(config.train_datapath, config.batch_size)
