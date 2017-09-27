@@ -19,6 +19,7 @@ def handle_data(path, save_path):
   data = pd.read_csv(path, header=0, sep=",", index_col=0)
   print("read from {} done".format(path))
   data = data.transpose()
+  columns = list(data.columns)
   print("{} data_shape is {}".format(path, data.shape))
 
   data_val = data.values
@@ -30,18 +31,19 @@ def handle_data(path, save_path):
   m, n = np.shape(div)
   print("begin to loop cal log...")
 
-  for i in range(m):
-    for j in range(n):
-      if div[i][j] != 0:
-        div[i][j] = 2.0 * div[i][j] - 1.0
+  # for i in range(m):
+  #   for j in range(n):
+  #     if div[i][j] != 0:
+  #       div[i][j] = 2.0 * div[i][j] - 1.0
+
   # div = 2.0 * div - 1.0
-  pd.DataFrame(div).to_csv(save_path, index=False)
+  pd.DataFrame(div).to_csv(save_path, index=False, columns=columns)
 
   print("save to {}".format(save_path))
 
 if __name__ == "__main__":
-  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80.train")
-  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80.infer")
+  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80-0-1.train")
+  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80-0-1.infer")
 
 
 
