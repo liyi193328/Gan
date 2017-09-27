@@ -108,7 +108,7 @@ class AutoEncoder(object):
         if step % config.test_freq_steps == 0:
           predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch, self.mask: sample_mask})
           sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
-          pd.DataFrame(predicts).to_csv(sample_path, index=False, header=None)
+          pd.DataFrame(predicts).to_csv(sample_path, index=False, columns=dataset.columns)
 
         if step % config.save_freq_steps == 0:
           save_dir = os.path.join(config.checkpoint_dir, self.model_name)

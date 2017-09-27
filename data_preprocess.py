@@ -19,6 +19,7 @@ def handle_data(path, save_path):
   data = pd.read_csv(path, header=0, sep=",", index_col=0)
   print("read from {} done".format(path))
   data = data.transpose()
+  columns = list(data.columns)
   print("{} data_shape is {}".format(path, data.shape))
 
   data_val = data.values
@@ -36,7 +37,7 @@ def handle_data(path, save_path):
   #       div[i][j] = 2.0 * div[i][j] - 1.0
 
   # div = 2.0 * div - 1.0
-  pd.DataFrame(div).to_csv(save_path, index=False)
+  pd.DataFrame(div).to_csv(save_path, index=False, columns=columns)
 
   print("save to {}".format(save_path))
 
