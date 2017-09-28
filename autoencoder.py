@@ -39,7 +39,6 @@ class AutoEncoder(object):
     # Define loss and optimizer, minimize the squared error
     self.loss = tf.reduce_mean(tf.pow(self.X - self.decoder_out, 2))
     self.loss_sum = tf.summary.scalar("train_loss",self.loss)
-
     self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
     self.saver = tf.train.Saver(max_to_keep=1)
@@ -48,18 +47,22 @@ class AutoEncoder(object):
 
     with tf.variable_scope("encoder"):
 
-      out = layers.linear(input, self.hidden_size)
+      out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
+      out = self.activation(out)
+      out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
       encoder_out = self.activation(out)
-
+      #(None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
     return encoder_out
 
   def decoder(self, input):
 
     with tf.variable_scope("decoder") as D:
 
-      out = layers.linear(input, self.feature_num)
+      out = layers.linear(input, self.hidden_size, scope="dec_first_layer")
+      out = self.activation(out)
+      out = layers.linear(out, self.feature_num, scope="dec_second_layer")
       decoder_out = self.activation(out)
-
+      #(None, fe // 9) -> (None, fe // 3) -> tanh -> (None, fe) -> tanh
     return decoder_out
 
   def train(self, config):
