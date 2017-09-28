@@ -100,3 +100,5 @@ ENV/
 reprocess.txt
 infer_data.csv
 train_data.csv
+data/
+tmp/
