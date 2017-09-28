@@ -35,10 +35,12 @@ class AutoEncoder(object):
     self.mask = tf.placeholder(tf.float32, [None, self.feature_num])
 
     self.encoder_out = self.encoder(self.X)
-    self.decoder_out = self.decoder(self.encoder_out) * self.mask
+    self.decoder_out = self.decoder(self.encoder_out)
+
+    mask_decoder_out = self.mask * self.decoder_out
 
     # Define loss and optimizer, minimize the squared error
-    self.loss = tf.reduce_mean(tf.pow(self.X - self.decoder_out, 2))
+    self.loss = tf.reduce_mean(tf.pow(self.X - mask_decoder_out, 2))
     self.loss_sum = tf.summary.scalar("train_loss",self.loss)
 
     self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
