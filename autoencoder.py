@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from Dataset import DataSet
+import matplotlib.pyplot as plt
 
 import layers
 import shutil
@@ -18,7 +19,7 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.01, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="sigmoid", model_name="auto_encoder"):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -37,12 +38,11 @@ class AutoEncoder(object):
     self.encoder_out = self.encoder(self.X)
     self.decoder_out = self.decoder(self.encoder_out)
 
-    mask_decoder_out = self.mask * self.decoder_out
+    mask_decoder_out = self.decoder_out * self.mask
 
     # Define loss and optimizer, minimize the squared error
     self.loss = tf.reduce_mean(tf.pow(self.X - mask_decoder_out, 2))
     self.loss_sum = tf.summary.scalar("train_loss",self.loss)
-
     self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
     self.saver = tf.train.Saver(max_to_keep=1)
@@ -51,20 +51,99 @@ class AutoEncoder(object):
 
     with tf.variable_scope("encoder"):
 
-      out = layers.linear(input, self.hidden_size)
+      out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
+      out = self.activation(out)
+      out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
       encoder_out = self.activation(out)
-
+      #(None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
     return encoder_out
 
   def decoder(self, input):
 
     with tf.variable_scope("decoder") as D:
 
-      out = layers.linear(input, self.feature_num)
+      out = layers.linear(input, self.hidden_size, scope="dec_first_layer")
+      out = self.activation(out)
+      out = layers.linear(out, self.feature_num, scope="dec_second_layer")
       decoder_out = self.activation(out)
-
+      #(None, fe // 9) -> (None, fe // 3) -> tanh -> (None, fe) -> tanh
     return decoder_out
 
+
+  def train_test_mnist(self, config):
+
+    # Import MNIST data
+    from tensorflow.examples.tutorials.mnist import input_data
+    mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
+
+    # Start Training
+    # Start a new TF session
+    with tf.Session() as sess:
+
+      load_model_dir = os.path.join(config.checkpoint_dir, self.model_name)
+      loaded = False
+      if config.load_checkpoint and os.path.exists(load_model_dir):
+        self.load(sess, config.checkpoint_dir)
+        loaded = True
+
+      elif os.path.exists(load_model_dir):
+        shutil.rmtree(load_model_dir)
+
+      # Run the initializer
+      tf.global_variables_initializer().run()
+
+      if not loaded:
+        # Training
+        for i in range(1, config.steps + 1):
+
+          # Prepare Data
+          # Get the next batch of MNIST data (only images are needed, not labels)
+          batch_x, _ = mnist.train.next_batch(config.batch_size)
+          mask = np.ones_like(batch_x)
+
+          # Run optimization op (backprop) and cost op (to get loss value)
+          _, l = sess.run([self.optimizer, self.loss], feed_dict={self.X: batch_x, self.mask: mask})
+
+          # Display logs per step
+          if i % config.log_freq_steps == 0 or i == 1:
+            print('Step %i: Minibatch Loss: %f' % (i, l))
+
+          if i % config.save_freq_steps == 0:
+            save_dir = os.path.join(config.checkpoint_dir, self.model_name)
+            self.save(sess, save_dir, i)
+
+      # Testing
+      # Encode and decode images from test set and visualize their reconstruction.
+      n = 4
+      canvas_orig = np.empty((28 * n, 28 * n))
+      canvas_recon = np.empty((28 * n, 28 * n))
+      for i in range(n):
+          # MNIST test set
+          batch_x, _ = mnist.test.next_batch(n)
+          mask = np.ones_like(batch_x)
+          # Encode and decode the digit image
+          g = sess.run(self.decoder_out, feed_dict={self.X: batch_x, self.mask: mask})
+
+          # Display original images
+          for j in range(n):
+              # Draw the original digits
+              canvas_orig[i * 28:(i + 1) * 28, j * 28:(j + 1) * 28] = \
+                  batch_x[j].reshape([28, 28])
+          # Display reconstructed images
+          for j in range(n):
+              # Draw the reconstructed digits
+              canvas_recon[i * 28:(i + 1) * 28, j * 28:(j + 1) * 28] = \
+                  g[j].reshape([28, 28])
+
+    print("Original Images")
+    plt.figure(figsize=(n, n))
+    plt.imshow(canvas_orig, origin="upper", cmap="gray")
+    plt.show()
+
+    print("Reconstructed Images")
+    plt.figure(figsize=(n, n))
+    plt.imshow(canvas_recon, origin="upper", cmap="gray")
+    plt.show()
 
   def train(self, config):
 
@@ -79,10 +158,11 @@ class AutoEncoder(object):
 
     with tf.Session() as session:
 
-      if config.load_checkpoint and os.path.exists(config.checkpoint_dir):
+      load_model_dir = os.path.join(config.checkpoint_dir, self.model_name)
+      if config.load_checkpoint and os.path.exists(load_model_dir):
         self.load(session, config.checkpoint_dir)
-      elif os.path.exists(config.checkpoint_dir):
-        shutil.rmtree(config.checkpoint_dir)
+      elif os.path.exists(load_model_dir):
+        shutil.rmtree(load_model_dir)
 
       self.writer = tf.summary.FileWriter(log_dirs, session.graph)
 
