@@ -19,7 +19,7 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.01, activation="sigmoid", model_name="auto_encoder"):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -38,6 +38,9 @@ class AutoEncoder(object):
     self.encoder_out = self.encoder(self.X)
     self.decoder_out = self.decoder(self.encoder_out)
 
+    tf.summary.histogram("encoder_out", self.encoder_out)
+    tf.summary.histogram("decoder_out", self.decoder_out)
+
     mask_decoder_out = self.decoder_out * self.mask
 
     total_valid_nums = tf.reduce_sum(self.mask)
@@ -51,7 +54,26 @@ class AutoEncoder(object):
     # self.loss = tf.reduce_mean(mask_mse, axis=1)
     # self.loss = tf.reduce_mean(tf.pow(self.X - mask_decoder_out, 2))
     self.loss_sum = tf.summary.scalar("train_loss",self.loss)
-    self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
+
+    with tf.name_scope('optimizer'):
+      # Gradient Descent
+      optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
+      # Op to calculate every variable gradient
+      grads = tf.gradients(self.loss, tf.trainable_variables())
+      grads = list(zip(grads, tf.trainable_variables()))
+      # Op to update all variables according to their gradient
+      self.apply_grads = optimizer.apply_gradients(grads_and_vars=grads)
+
+    # Create summaries to visualize weights
+    for var in tf.trainable_variables():
+      tf.summary.histogram(var.name, var)
+
+    # Summarize all gradients
+    for grad, var in grads:
+      tf.summary.histogram(var.name + '/gradient', grad)
+
+    # Merge all summaries into a single op
+    self.merged_summary_op = tf.summary.merge_all()
 
     self.saver = tf.train.Saver(max_to_keep=1)
 
@@ -60,22 +82,25 @@ class AutoEncoder(object):
     with tf.variable_scope("encoder"):
 
       out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
+      tf.summary.histogram("linear_out", out)
       out = self.activation(out)
-      out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
-      encoder_out = self.activation(out)
+      # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
+      # encoder_out = self.activation(out)
+
       #(None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
-    return encoder_out
+    return out
 
   def decoder(self, input):
 
     with tf.variable_scope("decoder") as D:
 
-      out = layers.linear(input, self.hidden_size, scope="dec_first_layer")
+      out = layers.linear(input, self.feature_num, scope="dec_first_layer")
+      tf.summary.histogram("linear_out", out)
       out = self.activation(out)
-      out = layers.linear(out, self.feature_num, scope="dec_second_layer")
-      decoder_out = self.activation(out)
+      # out = layers.linear(out, self.feature_num, scope="dec_second_layer")
+      # decoder_out = self.activation(out)
       #(None, fe // 9) -> (None, fe // 3) -> tanh -> (None, fe) -> tanh
-    return decoder_out
+    return out
 
 
   def train_test_mnist(self, config):
@@ -175,7 +200,6 @@ class AutoEncoder(object):
       self.writer = tf.summary.FileWriter(log_dirs, session.graph)
 
       tf.global_variables_initializer().run()
-      merge_sum_op = tf.summary.merge_all()
 
       sample_batch = dataset.sample_batch()
       sample_mask = np.float32(sample_batch > 0.0)
@@ -189,9 +213,12 @@ class AutoEncoder(object):
         mask = np.float32(mask)
         # print(np.shape(mask), mask.dtype)
 
-        _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss],
-                                           feed_dict={self.X: batch_data,self.mask: mask})
-        self.writer.add_summary(summary_str, step)
+        if step % config.save_freq_steps != 0:
+          _, loss = session.run([self.apply_grads, self.loss],
+                                           feed_dict={self.X: batch_data, self.mask: mask})
+        else:
+          _, summary_str, loss = session.run([self.apply_grads, self.merged_summary_op, self.loss],
+                                             feed_dict={self.X: batch_data, self.mask: mask})
 
         if step % config.log_freq_steps == 0:
           print("step {}th, loss: {}".format(step, loss))
@@ -202,6 +229,7 @@ class AutoEncoder(object):
           pd.DataFrame(predicts, columns=dataset.columns).to_csv(sample_path, index=False)
 
         if step % config.save_freq_steps == 0:
+          self.writer.add_summary(summary_str, step)
           save_dir = os.path.join(config.checkpoint_dir, self.model_name)
           self.save(session, save_dir, step)
 
