@@ -94,7 +94,6 @@ init = tf.global_variables_initializer()
 traindata = DataSet("./data/drop80-0-1.train", batch_size)
 testdata = DataSet("data/drop80-0-1.infer", batch_size, onepass=True)
 
-
 # Start Training
 # Start a new TF session
 with tf.Session() as sess:
@@ -107,9 +106,8 @@ with tf.Session() as sess:
         # Prepare Data
         # Get the next batch of MNIST data (only images are needed, not labels)
         batch_x = traindata.next()
-
         # Run optimization op (backprop) and cost op (to get loss value)
-        _, l = sess.run([optimizer, loss], feed_dict={X: batch_x})
+        _, l = sess.run([optimizer, loss], feed_dict={X: batch_x, mask: })
         # Display logs per step
         if i % display_step == 0 or i == 1:
             print('Step %i: Minibatch Loss: %f' % (i, l))
