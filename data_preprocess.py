@@ -33,9 +33,13 @@ def divide_max(data):
   trans = np.divide(data, matrix_max)
   return trans
 
+def same(data):
+  return data
+
 trans_map = {
   "row_normal":row_normalization,
-  "div_max": divide_max
+  "div_max": divide_max,
+  "same": same
 }
 
 def handle_data(path, save_path, way = "div_max"):
@@ -47,14 +51,13 @@ def handle_data(path, save_path, way = "div_max"):
 
   data = data.values
   data = trans_map[way](data)
-
   pd.DataFrame(data).to_csv(save_path, index=False)
 
   print("save to {}".format(save_path))
 
 if __name__ == "__main__":
-  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80_div_max.train")
-  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_div_max.infer")
+  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80_or.train", way="same")
+  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_or.infer", way="same")
 
 
 

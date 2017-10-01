@@ -19,7 +19,7 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.01, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="sigmoid", model_name="auto_encoder"):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -35,25 +35,30 @@ class AutoEncoder(object):
     self.X = tf.placeholder(tf.float32, [None, self.feature_num])
     self.mask = tf.placeholder(tf.float32, [None, self.feature_num])
 
-    self.encoder_out = self.encoder(self.X)
-    self.decoder_out = self.decoder(self.encoder_out)
-
-    tf.summary.histogram("encoder_out", self.encoder_out)
-    tf.summary.histogram("decoder_out", self.decoder_out)
+    self.encoder_out = self.encoder(self.X) #through activation
+    self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
     mask_decoder_out = self.decoder_out * self.mask
-
     total_valid_nums = tf.reduce_sum(self.mask)
+    tf.summary.histogram("encoder_out", self.encoder_out)
+    tf.summary.histogram("decoder_out", self.decoder_out)
     tf.summary.scalar("total_valid_nums", total_valid_nums)
 
-    # Define loss and optimizer, minimize the squared error
+    # ##cross entropy
+    # entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.X, logits=mask_decoder_out, name="loss")
+    # self.loss = tf.reduce_sum(entropy) / total_valid_nums
+
+    # self.loss = tf.reduce_mean(tf.reduce_sum(entropy, reduction_indices=[1]))
+
+    # # Define loss and optimizer, minimize the squared error
     mask_mse = tf.reduce_sum( tf.pow(self.X - mask_decoder_out, 2) )
     self.loss = mask_mse / total_valid_nums
 
     # mask_mse = tf.reduce_sum(mask_mse, axis=1)
     # self.loss = tf.reduce_mean(mask_mse, axis=1)
     # self.loss = tf.reduce_mean(tf.pow(self.X - mask_decoder_out, 2))
-    self.loss_sum = tf.summary.scalar("train_loss",self.loss)
+
+    tf.summary.scalar("train_loss",self.loss)
 
     with tf.name_scope('optimizer'):
       # Gradient Descent
@@ -83,12 +88,12 @@ class AutoEncoder(object):
 
       out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
       tf.summary.histogram("linear_out", out)
-      out = self.activation(out)
+      out_active = self.activation(out)
       # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
       # encoder_out = self.activation(out)
 
       #(None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
-    return out
+    return out_active
 
   def decoder(self, input):
 
@@ -96,7 +101,6 @@ class AutoEncoder(object):
 
       out = layers.linear(input, self.feature_num, scope="dec_first_layer")
       tf.summary.histogram("linear_out", out)
-      out = self.activation(out)
       # out = layers.linear(out, self.feature_num, scope="dec_second_layer")
       # decoder_out = self.activation(out)
       #(None, fe // 9) -> (None, fe // 3) -> tanh -> (None, fe) -> tanh
