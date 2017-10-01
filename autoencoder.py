@@ -18,7 +18,7 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.01, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="sigmoid", model_name="auto_encoder"):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -35,10 +35,12 @@ class AutoEncoder(object):
     self.mask = tf.placeholder(tf.float32, [None, self.feature_num])
 
     self.encoder_out = self.encoder(self.X)
-    self.decoder_out = self.decoder(self.encoder_out) * self.mask
+    self.decoder_out = self.decoder(self.encoder_out)
+
+    mask_decoder_out = self.decoder_out * self.mask
 
     # Define loss and optimizer, minimize the squared error
-    self.loss = tf.reduce_mean(tf.pow(self.X - self.decoder_out, 2))
+    self.loss = tf.reduce_mean(tf.pow(self.X - mask_decoder_out, 2))
     self.loss_sum = tf.summary.scalar("train_loss",self.loss)
     self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
