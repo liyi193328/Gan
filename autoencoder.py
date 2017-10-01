@@ -7,6 +7,8 @@ import numpy as np
 import tensorflow as tf
 from Dataset import DataSet
 import matplotlib.pyplot as plt
+from keras.layers import Input, Dense
+from keras.models import Model
 
 import layers
 import shutil
@@ -14,12 +16,13 @@ import shutil
 
 activation_dict = {
   "tanh":tf.tanh,
-  "sigmoid": tf.sigmoid
+  "sigmoid": tf.sigmoid,
+  "relu": tf.nn.relu
 }
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="relu", model_name="auto_encoder"):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -40,6 +43,7 @@ class AutoEncoder(object):
 
     mask_decoder_out = self.decoder_out * self.mask
     total_valid_nums = tf.reduce_sum(self.mask)
+
     tf.summary.histogram("encoder_out", self.encoder_out)
     tf.summary.histogram("decoder_out", self.decoder_out)
     tf.summary.scalar("total_valid_nums", total_valid_nums)
@@ -62,7 +66,8 @@ class AutoEncoder(object):
 
     with tf.name_scope('optimizer'):
       # Gradient Descent
-      optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
+      # optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
+      optimizer = tf.train.AdamOptimizer(self.learning_rate)
       # Op to calculate every variable gradient
       grads = tf.gradients(self.loss, tf.trainable_variables())
       grads = list(zip(grads, tf.trainable_variables()))
@@ -86,24 +91,29 @@ class AutoEncoder(object):
 
     with tf.variable_scope("encoder"):
 
-      out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
-      tf.summary.histogram("linear_out", out)
-      out_active = self.activation(out)
+      out = Dense(self.feature_num // 3, activation="relu")(input)
+      out = Dense(self.feature_num // 9, activation="relu")(out)
+      out = Dense(self.feature_num // 27, activation="relu")(out)
+
+      # out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
       # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
       # encoder_out = self.activation(out)
 
       #(None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
-    return out_active
+    return out
 
   def decoder(self, input):
 
     with tf.variable_scope("decoder") as D:
 
-      out = layers.linear(input, self.feature_num, scope="dec_first_layer")
-      tf.summary.histogram("linear_out", out)
+      # out = layers.linear(input, self.feature_num, scope="dec_first_layer")
+      out = Dense(self.feature_num // 9, activation="relu")(input)
+      out = Dense(self.feature_num // 3, activation="relu")(out)
+      out = Dense(self.feature_num, activation="relu")(out)
+
       # out = layers.linear(out, self.feature_num, scope="dec_second_layer")
       # decoder_out = self.activation(out)
-      #(None, fe // 9) -> (None, fe // 3) -> tanh -> (None, fe) -> tanh
+      #(None, fe // 9) -> (None, fe // 3) -> (None, fe)
     return out
 
 
@@ -200,6 +210,10 @@ class AutoEncoder(object):
         self.load(session, config.checkpoint_dir)
       elif os.path.exists(load_model_dir):
         shutil.rmtree(load_model_dir)
+
+      if config.load_checkpoint is False and os.path.exists(log_dirs):
+        shutil.rmtree(log_dirs)
+        os.makedirs(log_dirs)
 
       self.writer = tf.summary.FileWriter(log_dirs, session.graph)
 

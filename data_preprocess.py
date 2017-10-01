@@ -14,6 +14,9 @@ import codecs
 train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
 infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
+train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
+infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
+
 def row_normalization(data):
   row_sum = np.sum(data, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
@@ -43,6 +46,7 @@ trans_map = {
 }
 
 def handle_data(path, save_path, way = "div_max"):
+
 
   data = pd.read_csv(path, header=0, sep=",", index_col=0)
   print("read from {} done".format(path))
