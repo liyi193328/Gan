@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 from Dataset import DataSet
 import matplotlib.pyplot as plt
+import keras
 from keras.layers import Input, Dense, Dropout
 from keras.models import Model
 from keras import regularizers
@@ -92,9 +93,10 @@ class AutoEncoder(object):
 
     with tf.variable_scope("encoder"):
 
-      out = Dense(self.feature_num // 3, activation="sigmoid", kernel_regularizer=regularizers.l2(0.01))(input)
+      out = Dense(self.feature_num // 3, activation="relu")(input)
       out = Dense(self.feature_num // 9, activation="relu")(out)
-      out = Dense(self.feature_num // 27, activation="sigmoid", kernel_regularizer=regularizers.l2(0.01) )(out)
+      out = Dense(self.feature_num // 27)(out)
+      out = keras.layers.advanced_activations.PReLU(init='zero', weights=None)(out)
 
       # out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
       # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
@@ -109,8 +111,11 @@ class AutoEncoder(object):
 
       # out = Dropout(0.2)(input)
       out = Dense(self.feature_num // 9, activation="relu")(input)
-      out = Dense(self.feature_num // 3, activation="sigmoid", kernel_regularizer=regularizers.l2(0.01) )(out)
-      out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
+      out = Dense(self.feature_num // 3, activation="relu",  )(out)
+      # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
+      out = Dense(self.feature_num, kernel_regularizer=regularizers.l2(0.01) )(out)
+
+      out = keras.layers.advanced_activations.PReLU(weights=None, alpha_initializer="zero")(out)
 
       # out = layers.linear(input, self.feature_num, scope="dec_first_layer")
       # out = layers.linear(out, self.feature_num, scope="dec_second_layer")
@@ -249,7 +254,7 @@ class AutoEncoder(object):
         if step % config.test_freq_steps == 0:
           predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch, self.mask: sample_mask, K.learning_phase(): 0})
           sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
-          plot.plot_save(sample_batch, predicts, dataset.columns)
+          # plot.plot_save(sample_batch, predicts, dataset.columns)
           pd.DataFrame(predicts, columns=dataset.columns).to_csv(sample_path, index=False)
 
         if step % config.save_freq_steps == 0:
