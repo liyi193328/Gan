@@ -14,8 +14,8 @@ import codecs
 train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
 infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
-train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
-infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
+# train_path = r"/home/bigdata/cwl/data_preprocessed/reprocess.csv"
+# infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
 def row_normalization(data):
   row_sum = np.sum(data, axis=1)
@@ -24,10 +24,7 @@ def row_normalization(data):
   div = np.divide(data, row_sum)
   print("begin to loop cal log...")
   m, n = np.shape(div)
-  for i in range(m):
-    for j in range(n):
-      if div[i][j] != 0:
-        div[i][j] = 2.0 * div[i][j] - 1.0
+  div = np.log(1 + 1e5 * div)
 
   return div
 
@@ -36,17 +33,20 @@ def divide_max(data):
   trans = np.divide(data, matrix_max)
   return trans
 
+def log(data):
+  return np.log(data + 1.0)
+
 def same(data):
   return data
 
 trans_map = {
   "row_normal":row_normalization,
   "div_max": divide_max,
-  "same": same
+  "same": same,
+  "log": log
 }
 
 def handle_data(path, save_path, way = "div_max"):
-
 
   data = pd.read_csv(path, header=0, sep=",", index_col=0)
   print("read from {} done".format(path))
@@ -60,9 +60,11 @@ def handle_data(path, save_path, way = "div_max"):
   print("save to {}".format(save_path))
 
 if __name__ == "__main__":
-  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80_or.train", way="same")
-  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_or.infer", way="same")
+  # handle_data(train_path, r"/home/bigdata/cwl/Gan/data/reprocess.train", way="same")
+  # handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_or.infer", way="same")
 
+  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80_log.train", way="log")
+  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_log.infer", way="log")
 
 
 
