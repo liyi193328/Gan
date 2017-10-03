@@ -56,6 +56,9 @@ class DataSet:
   def shuffle_data(self):
     np.random.shuffle(self.data)
 
+  def reset(self):
+    self.cnt = 0
+
   @property
   def steps(self):
     return self.samples // self.batch_size

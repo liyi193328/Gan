@@ -11,9 +11,6 @@ import numpy as np
 import codecs
 
 
-train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
-infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
-
 # train_path = r"/home/bigdata/cwl/data_preprocessed/reprocess.csv"
 # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
@@ -73,11 +70,16 @@ def handle_data(train_path, test_path, save_train_path, save_test_path, way = "d
 
 
 if __name__ == "__main__":
-  # handle_data(train_path, r"/home/bigdata/cwl/Gan/data/reprocess.train", way="same")
-  # handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_or.infer", way="same")
 
-  handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop80_log.train", r"/home/bigdata/cwl/Gan/data/drop80_log.infer", way="log")
+  # train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
+  # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
+  #
+  # handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop80_log.train", r"/home/bigdata/cwl/Gan/data/drop80_log.infer", way="log")
 
+  train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop60.csv"
+  infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop60.csv"
 
+  handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop60_log.train",
+              r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
 

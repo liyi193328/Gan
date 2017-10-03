@@ -203,6 +203,7 @@ class AutoEncoder(object):
 
   def predict_tmp(self, sess, step, dataset, config):
     print("testing for {}th...".format(step))
+    dataset.reset()
     predict_data = []
     while (1):
       batch_data = dataset.next()
@@ -220,7 +221,6 @@ class AutoEncoder(object):
     if os.path.exists(outDir) == False:
       os.makedirs(outDir)
     outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
-
     plot.plot_save(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
 
     df.to_csv(outPath, index=None)
