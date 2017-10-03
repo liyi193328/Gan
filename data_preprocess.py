@@ -46,25 +46,37 @@ trans_map = {
   "log": log
 }
 
-def handle_data(path, save_path, way = "div_max"):
+def handle_data(train_path, test_path, save_train_path, save_test_path, way = "div_max"):
 
-  data = pd.read_csv(path, header=0, sep=",", index_col=0)
-  print("read from {} done".format(path))
-  data = data.transpose()
-  print("{} data_shape is {}".format(path, data.shape))
+  def sub_handle(path, way):
+    data = pd.read_csv(path, header=0, sep=",", index_col=0)
+    print("read from {} done".format(path))
+    data = data.transpose()
+    columns = list(data.columns)
+    print("{} data_shape is {}".format(path, data.shape))
 
-  data = data.values
-  data = trans_map[way](data)
-  pd.DataFrame(data).to_csv(save_path, index=False)
+    data = data.values
+    data = trans_map[way](data)
+    data = pd.DataFrame(data, columns=columns)
+    print(data.shape)
+    return data
 
-  print("save to {}".format(save_path))
+  train_df = sub_handle(train_path, way)
+  test_df = sub_handle(test_path, way)
+
+  all_df = pd.concat([train_df, test_df], axis=0)
+
+  all_df.to_csv(save_train_path, index=False)
+  print("save to {}".format(save_train_path))
+  test_df.to_csv(save_test_path, index=False)
+  print("save to {}".format(save_test_path))
+
 
 if __name__ == "__main__":
   # handle_data(train_path, r"/home/bigdata/cwl/Gan/data/reprocess.train", way="same")
   # handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_or.infer", way="same")
 
-  handle_data(train_path, r"/home/bigdata/cwl/Gan/data/drop80_log.train", way="log")
-  handle_data(infer_path, r"/home/bigdata/cwl/Gan/data/drop80_log.infer", way="log")
+  handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop80_log.train", r"/home/bigdata/cwl/Gan/data/drop80_log.infer", way="log")
 
 
 

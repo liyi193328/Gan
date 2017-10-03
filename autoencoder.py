@@ -2,11 +2,12 @@
 
 import os
 import sys
+import plot
+
 import pandas as pd
 import numpy as np
 import tensorflow as tf
 from Dataset import DataSet
-import matplotlib.pyplot as plt
 import keras
 from keras.layers import Input, Dense, Dropout
 from keras.models import Model
@@ -16,7 +17,6 @@ from keras import backend as K
 
 import layers
 import shutil
-import plot
 
 activation_dict = {
   "tanh":tf.tanh,
@@ -96,7 +96,7 @@ class AutoEncoder(object):
       out = Dense(self.feature_num // 3, activation="relu")(input)
       out = Dense(self.feature_num // 9, activation="relu")(out)
       out = Dense(self.feature_num // 27)(out)
-      out = keras.layers.advanced_activations.PReLU(init='zero', weights=None)(out)
+      out = keras.layers.advanced_activations.PReLU(alpha_initializer="zero", weights=None)(out)
 
       # out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
       # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
@@ -111,7 +111,7 @@ class AutoEncoder(object):
 
       # out = Dropout(0.2)(input)
       out = Dense(self.feature_num // 9, activation="relu")(input)
-      out = Dense(self.feature_num // 3, activation="relu",  )(out)
+      out = Dense(self.feature_num // 3, activation="relu")(out)
       # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
       out = Dense(self.feature_num, kernel_regularizer=regularizers.l2(0.01) )(out)
 
@@ -200,9 +200,37 @@ class AutoEncoder(object):
     plt.imshow(canvas_recon, origin="upper", cmap="gray")
     plt.show()
 
+
+  def predict_tmp(self, sess, step, dataset, config):
+    print("testing for {}th...".format(step))
+    predict_data = []
+    while (1):
+      batch_data = dataset.next()
+      if batch_data is None:
+        break
+      mask = (batch_data > 0.0)
+      mask = np.float32(mask)
+      predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 0})
+      predict_data.append(predicts)
+    predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
+    df = pd.DataFrame(predict_data, columns=dataset.columns)
+    if os.path.exists(config.outDir) == False:
+      os.makedirs(config.outDir)
+    outDir = os.path.join(config.outDir, self.model_name)
+    if os.path.exists(outDir) == False:
+      os.makedirs(outDir)
+    outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
+
+    plot.plot_save(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
+
+    df.to_csv(outPath, index=None)
+    print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
+
   def train(self, config):
 
     dataset = DataSet(config.train_datapath, config.batch_size)
+    test_dataset = DataSet(config.infer_complete_datapath, config.batch_size, onepass=True)
+
     steps = dataset.steps * config.epoch
     print("total {} steps...".format(steps))
 
@@ -252,10 +280,7 @@ class AutoEncoder(object):
           print("step {}th, loss: {}".format(step, loss))
 
         if step % config.test_freq_steps == 0:
-          predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch, self.mask: sample_mask, K.learning_phase(): 0})
-          sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
-          # plot.plot_save(sample_batch, predicts, dataset.columns)
-          pd.DataFrame(predicts, columns=dataset.columns).to_csv(sample_path, index=False)
+          self.predict_tmp(session, step, test_dataset, config)
 
         if step % config.save_freq_steps == 0:
           self.writer.add_summary(summary_str, step)
