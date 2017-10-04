@@ -14,6 +14,16 @@ import codecs
 # train_path = r"/home/bigdata/cwl/data_preprocessed/reprocess.csv"
 # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
+def reverse_normalization(data):
+  exp = np.exp(data) - 1
+  row_sum = np.sum(exp, axis=1)
+  row_sum = np.expand_dims(row_sum, 1)
+
+  div = np.divide(exp, row_sum)
+  div = np.log(1 + 1e5 * div)
+
+  return div
+
 def row_normalization(data):
   row_sum = np.sum(data, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
@@ -37,27 +47,29 @@ def same(data):
   return data
 
 trans_map = {
+  "reverse":reverse_normalization,
   "row_normal":row_normalization,
   "div_max": divide_max,
   "same": same,
   "log": log
 }
 
-def handle_data(train_path, test_path, save_train_path, save_test_path, way = "div_max"):
 
-  def sub_handle(path, way):
-    data = pd.read_csv(path, header=0, sep=",", index_col=0)
-    print("read from {} done".format(path))
+def sub_handle(path, way,ind_col=0, trans=True ,save_path=None):
+  data = pd.read_csv(path, header=0, sep=",", index_col=ind_col)
+  print("read from {} done".format(path))
+  if trans:
     data = data.transpose()
-    columns = list(data.columns)
-    print("{} data_shape is {}".format(path, data.shape))
+  columns = list(data.columns)
+  print("{} data_shape is {}".format(path, data.shape))
 
-    data = data.values
-    data = trans_map[way](data)
-    data = pd.DataFrame(data, columns=columns)
-    print(data.shape)
-    return data
+  data = data.values
+  data = trans_map[way](data)
+  data = pd.DataFrame(data, columns=columns)
+  print(data.shape)
+  return data
 
+def handle_data(train_path, test_path, save_train_path, save_test_path, way = "div_max"):
   train_df = sub_handle(train_path, way)
   test_df = sub_handle(test_path, way)
 
