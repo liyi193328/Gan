@@ -93,9 +93,9 @@ class AutoEncoder(object):
 
     with tf.variable_scope("encoder"):
 
-      out = Dense(self.feature_num // 3, activation="relu")(input)
-      out = Dense(self.feature_num // 9, activation="relu")(out)
-      out = Dense(self.feature_num // 27)(out)
+      out = Dense(self.feature_num // 4, activation="relu")(input)
+      out = Dense(self.feature_num // 16, activation="relu")(out)
+      out = Dense(self.feature_num // 32)(out)
       out = keras.layers.advanced_activations.PReLU(alpha_initializer="zero", weights=None)(out)
 
       # out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
@@ -110,8 +110,8 @@ class AutoEncoder(object):
     with tf.variable_scope("decoder") as D:
 
       # out = Dropout(0.2)(input)
-      out = Dense(self.feature_num // 9, activation="relu")(input)
-      out = Dense(self.feature_num // 3, activation="relu")(out)
+      out = Dense(self.feature_num // 16, activation="relu")(input)
+      out = Dense(self.feature_num // 4, activation="relu")(out)
       # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
       out = Dense(self.feature_num, kernel_regularizer=regularizers.l2(0.01) )(out)
 
@@ -221,7 +221,8 @@ class AutoEncoder(object):
     if os.path.exists(outDir) == False:
       os.makedirs(outDir)
     outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
-    plot.plot_save(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
+    if config.plot_save:
+      plot.plot_save(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
 
     df.to_csv(outPath, index=None)
     print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))

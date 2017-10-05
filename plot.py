@@ -11,8 +11,18 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import data_preprocess
+import seaborn as sns
+from scipy.stats import pearsonr
 
-def plot_save(test_path_or_df, infer_path_or_df, save_path):
+def get_top_feature(df, top=100):
+  vars = np.var(df.values, axis=0)
+  standard_vars = np.sqrt(vars)
+  mean = np.mean(df.values, axis=0)
+  x = np.divide(standard_vars, mean)
+  top_vars_index = x.argsort()[-top:][::-1]
+  return df.columns[top_vars_index]
+
+def raw_dataframe(test_path_or_df, infer_path_or_df):
   if type(test_path_or_df) == str:
     dropout_df = data_preprocess.sub_handle(test_path_or_df,way="reverse",ind_col=None, trans=False)
     infer_df = data_preprocess.sub_handle(infer_path_or_df,way="reverse",ind_col=None,trans=False)
@@ -23,6 +33,12 @@ def plot_save(test_path_or_df, infer_path_or_df, save_path):
   magic_df = data_preprocess.sub_handle("/home/bigdata/cwl/Gan/prediction/drop80_magic.csv", way="row_normal",ind_col=None, trans=False)
   whole_df = data_preprocess.sub_handle("/home/bigdata/cwl/data_preprocessed/process_whole_test_drop80.csv", way="row_normal", ind_col=0, trans=True)
   scimpute_df = data_preprocess.sub_handle("/home/bigdata/scimpute_count.csv", way="row_normal", ind_col=0, trans=True)
+
+  return [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
+
+def get_dataframe(test_path_or_df, infer_path_or_df):
+
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df] = raw_dataframe(test_path_or_df, infer_path_or_df)
 
   # or_df = data_preprocess.sub_handle("/home/bigdata/cwl/data_preprocessed/expx_dropprocessed.csv", way="row_normal",
   #                                    trans=False)
@@ -37,6 +53,46 @@ def plot_save(test_path_or_df, infer_path_or_df, save_path):
   whole_df = whole_df.iloc[indexs]
   scimpute_df = scimpute_df.iloc[indexs]
   dropout_df = whole_df * np.float32(dropout_df > 0.0)
+
+  return [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs]
+
+def get_similarity(test_path_or_df, infer_path_or_df):
+  df_list = raw_dataframe(test_path_or_df, infer_path_or_df)
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df] = df_list
+  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
+  for i in range(1, len(name_list)):
+    print(name_list[i] + "...")
+    df = df_list[i]
+    x = np.reshape(df_list[0].values, (-1))
+    y = np.reshape(df.values, (-1))
+    coefficient, p_value = pearsonr(x, y)
+    print(coefficient, p_value)
+  return
+
+def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100, **kwargs):
+
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
+  df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
+  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
+  high_variance_columns = get_top_feature(whole_df)
+  sel_df_list = [df[high_variance_columns] for df in df_list]
+  plt.rcParams["figure.figsize"] = [20, 10]
+  fig, axn = plt.subplots(1, 5, sharex=True, sharey=True)
+
+  ax_list = list(axn.flat)
+  # cbar_ax = fig.add_axes([.91, .3, .03, .4])
+  for i in range(len(ax_list)):
+    ax, name, df = ax_list[i], name_list[i], sel_df_list[i]
+    ax.set_title(name)
+    sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
+    #     , cbar= i == len(ax_list) - 1)
+  fig.savefig(save_path, dpi=600)
+  fig.savefig(save_path.replace(".svg", ".png"), dpi=600)
+
+# def cal_corrcoef()
+def plot_save(test_path_or_df, infer_path_or_df, save_path):
+
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
 
   print(dropout_df.shape, infer_df.shape, magic_df.shape, scimpute_df.shape)
   # Two subplots, the axes array is 1-d
@@ -89,6 +145,7 @@ def plot_save(test_path_or_df, infer_path_or_df, save_path):
     axarr[0,2].scatter(equal_zero_index, scimpute_series.iloc[equal_zero_index], color="r")
 
   pp = PdfPages(save_path)
+
   figs = None
   if figs is None:
     figs = [plt.figure(n) for n in plt.get_fignums()]
@@ -99,4 +156,6 @@ def plot_save(test_path_or_df, infer_path_or_df, save_path):
   print("saved fig pdfs to {}".format(save_path))
 
 if __name__ == "__main__":
-  plot_save("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/test.pdf")
+  # plot_save("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/test.pdf")
+  # plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/head_test.svg")
+  get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete")

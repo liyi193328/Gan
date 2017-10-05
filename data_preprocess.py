@@ -14,24 +14,22 @@ import codecs
 # train_path = r"/home/bigdata/cwl/data_preprocessed/reprocess.csv"
 # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
-def reverse_normalization(data):
+def reverse_normalization(data, factor=1e5):
   exp = np.exp(data) - 1
   row_sum = np.sum(exp, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
-
   div = np.divide(exp, row_sum)
-  div = np.log(1 + 1e5 * div)
-
+  div = np.log(1 + factor * div)
   return div
 
-def row_normalization(data):
+def row_normalization(data, factor=1e5):
   row_sum = np.sum(data, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
 
   div = np.divide(data, row_sum)
   print("begin to loop cal log...")
   m, n = np.shape(div)
-  div = np.log(1 + 1e5 * div)
+  div = np.log(1 + factor * div)
 
   return div
 
@@ -55,7 +53,7 @@ trans_map = {
 }
 
 
-def sub_handle(path, way,ind_col=0, trans=True ,save_path=None):
+def sub_handle(path, way,ind_col=0, trans=True ,save_path=None,**kwargs):
   data = pd.read_csv(path, header=0, sep=",", index_col=ind_col)
   print("read from {} done".format(path))
   if trans:
@@ -64,14 +62,17 @@ def sub_handle(path, way,ind_col=0, trans=True ,save_path=None):
   print("{} data_shape is {}".format(path, data.shape))
 
   data = data.values
-  data = trans_map[way](data)
+  data = trans_map[way](data,**kwargs)
   data = pd.DataFrame(data, columns=columns)
   print(data.shape)
+  if save_path is not None:
+    data.to_csv(save_path, index=False)
+    print("saved to {}".format(save_path))
   return data
 
-def handle_data(train_path, test_path, save_train_path, save_test_path, way = "div_max"):
-  train_df = sub_handle(train_path, way)
-  test_df = sub_handle(test_path, way)
+def handle_data(train_path, test_path, save_train_path, save_test_path, way = "div_max", **kwargs):
+  train_df = sub_handle(train_path, way, **kwargs)
+  test_df = sub_handle(test_path, way, **kwargs)
 
   all_df = pd.concat([train_df, test_df], axis=0)
 
@@ -88,10 +89,12 @@ if __name__ == "__main__":
   #
   # handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop80_log.train", r"/home/bigdata/cwl/Gan/data/drop80_log.infer", way="log")
 
-  train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop60.csv"
-  infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop60.csv"
+  # train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop60.csv"
+  # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop60.csv"
+  #
+  # handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop60_log.train",
+  #             r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
-  handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop60_log.train",
-              r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
+  sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6)
 
