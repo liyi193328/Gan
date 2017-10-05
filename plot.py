@@ -86,8 +86,30 @@ def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100,
     ax.set_title(name)
     sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
     #     , cbar= i == len(ax_list) - 1)
-  fig.savefig(save_path, dpi=600)
+
+  # fig.savefig(save_path, dpi=600)
   fig.savefig(save_path.replace(".svg", ".png"), dpi=600)
+
+def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_choose_nums = 200):
+
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
+  df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
+  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
+  # feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 6000, 8000, 10000]
+  feature_indexs = np.random.choice(range(len(df_list[0])), feature_choose_nums)
+  sub_df_list = [df[df.columns[feature_indexs]] for df in df_list]
+  fig, axn = plt.subplots(1, 4, sharey=True)
+  ax_list = axn.flat
+  for i in range(1, len(df_list)):
+    x = np.reshape(sub_df_list[0].values, (-1))
+    y = np.reshape(sub_df_list[i].values, (-1))
+    subplot = ax_list[i - 1]
+    subplot.set_ylim(-0.5, np.max(y) + 0.5)
+    subplot.set_xlim(-0.5, np.max(x) + 0.5)
+    subplot.set_title(name_list[i])
+    subplot.scatter(x, y)
+  if save_path is not None:
+    plt.savefig(save_path, dpi=600)
 
 # def cal_corrcoef()
 def plot_save(test_path_or_df, infer_path_or_df, save_path):
@@ -155,7 +177,9 @@ def plot_save(test_path_or_df, infer_path_or_df, save_path):
   pp.close()
   print("saved fig pdfs to {}".format(save_path))
 
+
 if __name__ == "__main__":
   # plot_save("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/test.pdf")
   # plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/head_test.svg")
-  get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete")
+  # get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete")
+  scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")
