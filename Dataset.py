@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 
 class DataSet:
-  def __init__(self, path, batch_size=128, shuffle=True, onepass=False):
+
+  def __init__(self, path, batch_size=128, shuffle=True, onepass=False, nrows=None):
     print("make dataset from {}...".format(path))
-    data = pd.read_csv(path, sep=",")
+    data = pd.read_csv(path, sep=",", nrows=nrows)
     self.columns = list(data.columns)
     data = np.float32(data.values)
     self.path = path
@@ -54,6 +55,9 @@ class DataSet:
 
   def shuffle_data(self):
     np.random.shuffle(self.data)
+
+  def reset(self):
+    self.cnt = 0
 
   @property
   def steps(self):

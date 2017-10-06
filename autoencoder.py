@@ -2,24 +2,32 @@
 
 import os
 import sys
+import plot
+import data_preprocess
+
 import pandas as pd
 import numpy as np
 import tensorflow as tf
 from Dataset import DataSet
-import matplotlib.pyplot as plt
+import keras
+from keras.layers import Input, Dense, Dropout
+from keras.models import Model
+from keras import regularizers
+from keras import constraints
+from keras import backend as K
 
 import layers
 import shutil
 
-
 activation_dict = {
   "tanh":tf.tanh,
-  "sigmoid": tf.sigmoid
+  "sigmoid": tf.sigmoid,
+  "relu": tf.nn.relu
 }
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="sigmoid", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="relu", model_name="auto_encoder"):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -35,15 +43,50 @@ class AutoEncoder(object):
     self.X = tf.placeholder(tf.float32, [None, self.feature_num])
     self.mask = tf.placeholder(tf.float32, [None, self.feature_num])
 
-    self.encoder_out = self.encoder(self.X)
-    self.decoder_out = self.decoder(self.encoder_out)
+    self.encoder_out = self.encoder(self.X) #through activation
+    self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
     mask_decoder_out = self.decoder_out * self.mask
+    total_valid_nums = tf.reduce_sum(self.mask)
 
-    # Define loss and optimizer, minimize the squared error
-    self.loss = tf.reduce_mean(tf.pow(self.X - mask_decoder_out, 2))
-    self.loss_sum = tf.summary.scalar("train_loss",self.loss)
-    self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
+    tf.summary.histogram("encoder_out", self.encoder_out)
+    tf.summary.histogram("decoder_out", self.decoder_out)
+    tf.summary.scalar("total_valid_nums", total_valid_nums)
+
+    # # ##cross entropy
+    # entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.X, logits=mask_decoder_out, name="loss")
+    # self.loss = tf.reduce_sum(entropy) / total_valid_nums
+
+    # self.loss = tf.reduce_mean(tf.reduce_sum(entropy, reduction_indices=[1]))
+
+    # # Define loss and optimizer, minimize the squared error
+
+    mask_mse = tf.reduce_sum( tf.pow(self.X - mask_decoder_out, 2) )
+    self.loss = mask_mse / total_valid_nums
+
+
+    tf.summary.scalar("train_loss",self.loss)
+
+    with tf.name_scope('optimizer'):
+      # Gradient Descent
+      # optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
+      optimizer = tf.train.AdamOptimizer(self.learning_rate)
+      # Op to calculate every variable gradient
+      grads = tf.gradients(self.loss, tf.trainable_variables())
+      grads = list(zip(grads, tf.trainable_variables()))
+      # Op to update all variables according to their gradient
+      self.apply_grads = optimizer.apply_gradients(grads_and_vars=grads)
+
+    # Create summaries to visualize weights
+    for var in tf.trainable_variables():
+      tf.summary.histogram(var.name, var)
+
+    # Summarize all gradients
+    for grad, var in grads:
+      tf.summary.histogram(var.name + '/gradient', grad)
+
+    # Merge all summaries into a single op
+    self.merged_summary_op = tf.summary.merge_all()
 
     self.saver = tf.train.Saver(max_to_keep=1)
 
@@ -51,23 +94,36 @@ class AutoEncoder(object):
 
     with tf.variable_scope("encoder"):
 
-      out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
-      out = self.activation(out)
-      out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
-      encoder_out = self.activation(out)
+      out = Dense(self.feature_num // 4, activation="relu")(input)
+      out = Dense(self.feature_num // 16, activation="relu")(out)
+      out = Dense(self.feature_num // 32)(out)
+      out = keras.layers.advanced_activations.PReLU(alpha_initializer="zero", weights=None)(out)
+
+      # out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
+      # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
+      # out = self.activation(out)
+
       #(None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
-    return encoder_out
+    return out
 
   def decoder(self, input):
 
     with tf.variable_scope("decoder") as D:
 
-      out = layers.linear(input, self.hidden_size, scope="dec_first_layer")
-      out = self.activation(out)
-      out = layers.linear(out, self.feature_num, scope="dec_second_layer")
-      decoder_out = self.activation(out)
-      #(None, fe // 9) -> (None, fe // 3) -> tanh -> (None, fe) -> tanh
-    return decoder_out
+      # out = Dropout(0.2)(input)
+      out = Dense(self.feature_num // 16, activation="relu")(input)
+      out = Dense(self.feature_num // 4, activation="relu")(out)
+      # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
+      out = Dense(self.feature_num, kernel_regularizer=regularizers.l2(0.01) )(out)
+
+      out = keras.layers.advanced_activations.PReLU(weights=None, alpha_initializer="zero")(out)
+
+      # out = layers.linear(input, self.feature_num, scope="dec_first_layer")
+      # out = layers.linear(out, self.feature_num, scope="dec_second_layer")
+      # out = self.activation(out)
+
+      #(None, fe // 9) -> (None, fe // 3) -> (None, fe)
+    return out
 
 
   def train_test_mnist(self, config):
@@ -145,10 +201,46 @@ class AutoEncoder(object):
     plt.imshow(canvas_recon, origin="upper", cmap="gray")
     plt.show()
 
+
+  def predict_tmp(self, sess, step, dataset, config):
+    print("testing for {}th...".format(step))
+    dataset.reset()
+    predict_data = []
+    while (1):
+      batch_data = dataset.next()
+      if batch_data is None:
+        break
+      mask = (batch_data > 0.0)
+      mask = np.float32(mask)
+      predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 0})
+      predict_data.append(predicts)
+    predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
+    rev_normal_predict_data = data_preprocess.reverse_normalization(predict_data, 1e6) #reverse normalization
+
+    df = pd.DataFrame(predict_data, columns=dataset.columns)
+    if os.path.exists(config.outDir) == False:
+      os.makedirs(config.outDir)
+    outDir = os.path.join(config.outDir, self.model_name)
+    if os.path.exists(outDir) == False:
+      os.makedirs(outDir)
+    outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
+    if config.plot_save:
+      plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
+
+    df.to_csv(outPath, index=None)
+    print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
+    pd.DataFrame(rev_normal_predict_data, columns=dataset.columns).to_csv(outPath.replace(".complete", ".revnormal"),
+                                                                        index=None)
+    print("save rev normal data to {}".format(outPath.replace(".complete", ".revnormal")))
+
   def train(self, config):
 
     dataset = DataSet(config.train_datapath, config.batch_size)
+    test_dataset = DataSet(config.infer_complete_datapath, config.batch_size, onepass=True)
+
     steps = dataset.steps * config.epoch
+    print("total {} steps...".format(steps))
+
     sample_dirs = os.path.join("samples", self.model_name)
     log_dirs = os.path.join("logs", self.model_name)
 
@@ -164,10 +256,13 @@ class AutoEncoder(object):
       elif os.path.exists(load_model_dir):
         shutil.rmtree(load_model_dir)
 
+      if config.load_checkpoint is False and os.path.exists(log_dirs):
+        shutil.rmtree(log_dirs)
+        os.makedirs(log_dirs)
+
       self.writer = tf.summary.FileWriter(log_dirs, session.graph)
 
       tf.global_variables_initializer().run()
-      merge_sum_op = tf.summary.merge_all()
 
       sample_batch = dataset.sample_batch()
       sample_mask = np.float32(sample_batch > 0.0)
@@ -181,19 +276,21 @@ class AutoEncoder(object):
         mask = np.float32(mask)
         # print(np.shape(mask), mask.dtype)
 
-        _, summary_str, loss = session.run([self.optimizer, merge_sum_op, self.loss],
-                                           feed_dict={self.X: batch_data,self.mask: mask})
-        self.writer.add_summary(summary_str, step)
+        if step % config.save_freq_steps != 0:
+          _, loss = session.run([self.apply_grads, self.loss],
+                                           feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 1})
+        else:
+          _, summary_str, loss = session.run([self.apply_grads, self.merged_summary_op, self.loss],
+                                             feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 1})
 
         if step % config.log_freq_steps == 0:
           print("step {}th, loss: {}".format(step, loss))
 
         if step % config.test_freq_steps == 0:
-          predicts = session.run(self.decoder_out, feed_dict={self.X: sample_batch, self.mask: sample_mask})
-          sample_path = os.path.join(sample_dirs, "{}.{}".format(self.model_name, step))
-          pd.DataFrame(predicts, columns=dataset.columns).to_csv(sample_path, index=False)
+          self.predict_tmp(session, step, test_dataset, config)
 
         if step % config.save_freq_steps == 0:
+          self.writer.add_summary(summary_str, step)
           save_dir = os.path.join(config.checkpoint_dir, self.model_name)
           self.save(session, save_dir, step)
 
@@ -214,7 +311,7 @@ class AutoEncoder(object):
           break
         mask = (batch_data > 0.0)
         mask = np.float32(mask)
-        predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask})
+        predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 0})
         predict_data.append(predicts)
     predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
     df = pd.DataFrame(predict_data, columns=dataset.columns)
