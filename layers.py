@@ -11,6 +11,6 @@ def linear(input, output_dim, scope=None, stddev=1.0):
     b = tf.get_variable(
       'b',
       [output_dim],
-      initializer=tf.constant_initializer(0.0)
+      initializer=tf.random_normal_initializer(stddev=stddev)
     )
     return tf.matmul(input, w) + b
