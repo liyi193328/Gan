@@ -3,6 +3,7 @@
 import os
 import sys
 import plot
+import data_preprocess
 
 import pandas as pd
 import numpy as np
@@ -214,6 +215,8 @@ class AutoEncoder(object):
       predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 0})
       predict_data.append(predicts)
     predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
+    rev_normal_predict_data = data_preprocess.reverse_normalization(predict_data, 1e6) #reverse normalization
+
     df = pd.DataFrame(predict_data, columns=dataset.columns)
     if os.path.exists(config.outDir) == False:
       os.makedirs(config.outDir)
@@ -222,10 +225,13 @@ class AutoEncoder(object):
       os.makedirs(outDir)
     outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
     if config.plot_save:
-      plot.plot_save(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
+      plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
 
     df.to_csv(outPath, index=None)
     print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
+    pd.DataFrame(rev_normal_predict_data, columns=dataset.columns).to_csv(outPath.replace(".complete", ".revnormal"),
+                                                                        index=None)
+    print("save rev normal data to {}".format(outPath.replace(".complete", ".revnormal")))
 
   def train(self, config):
 

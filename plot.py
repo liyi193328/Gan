@@ -9,6 +9,8 @@ import pandas as pd
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+plt.style.use("ggplot")
+
 from matplotlib.backends.backend_pdf import PdfPages
 import data_preprocess
 import seaborn as sns
@@ -87,8 +89,8 @@ def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100,
     sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
     #     , cbar= i == len(ax_list) - 1)
 
-  # fig.savefig(save_path, dpi=600)
-  fig.savefig(save_path.replace(".svg", ".png"), dpi=600)
+  fig.savefig(save_path, dpi=600)
+  # fig.savefig(save_path.replace(".svg", ".png"), dpi=600)
 
 def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_choose_nums = 200):
 
@@ -112,13 +114,18 @@ def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_c
     plt.savefig(save_path, dpi=600)
 
 # def cal_corrcoef()
-def plot_save(test_path_or_df, infer_path_or_df, save_path):
+def plot_complete(test_path_or_df, infer_path_or_df, save_path):
 
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
+
+  df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
+  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
 
   print(dropout_df.shape, infer_df.shape, magic_df.shape, scimpute_df.shape)
   # Two subplots, the axes array is 1-d
   feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 6000, 8000, 10000]
+  feature_index = [3, 100]
+
   columns = list(dropout_df.columns)
   x = np.arange(0, len(indexs), 1)
   for feature_index in feature_indexs:
@@ -126,60 +133,75 @@ def plot_save(test_path_or_df, infer_path_or_df, save_path):
     column = columns[feature_index]
 
     f, axarr = plt.subplots(2,3,sharex=True)
-    plt.xlim(-1, len(infer_df) + 1)
+    ax_list = axarr.flat
 
-    whole_series = whole_df[whole_df.columns[feature_index]]
-    dropout_series = dropout_df[column]
-    magic_series = magic_df[column]
-    scimpute_series = scimpute_df[column]
-    infer_series = infer_df[column]
+    series_list = [df[ df.columns[feature_index]] for df in df_list]
+
+    whole_series, dropout_series, magic_series, scimpute_series, infer_series = series_list
 
     y_max = 0.0
-    for y in [whole_series, dropout_series, magic_series, scimpute_series, infer_series]:
+    for y in series_list:
       y_max = max(y_max, y.max())
     y_max += 0.5
 
     greater_zero_index = np.where(dropout_series > 0.0)[0]
     equal_zero_index = np.where(dropout_series == 0.0)[0]
 
-    axarr[0,0].set_title("whole: {}".format(column))
-    axarr[0, 0].set_ylim(0, y_max)
-    axarr[0,0].scatter(x, whole_series)
+    for i in range(len(name_list)):
+      ax = ax_list[i]
+      ax.set_title("{}: {}".format(name_list[i], column))
+      ax.set_xlim(-1, len(infer_df) + 1)
+      ax.set_ylim(0, y_max)
+      for label in (ax.get_xticklabels() + ax.get_yticklabels()):
+        label.set_fontname('Arial')
+        label.set_fontsize(5)
+      sizes = 8 ** 2
+      if name_list[i] in ["magic", "scimpute", "ae"]:
+        ax.scatter(greater_zero_index, series_list[i].iloc[greater_zero_index], s=sizes)
+        ax.scatter(equal_zero_index, series_list[i].iloc[equal_zero_index], color="r", s=sizes)
+      else:
+        ax.scatter(x, series_list[i], s=sizes)
 
-    axarr[0,1].set_title('dropout: {}'.format(column))
-    axarr[0, 1].set_ylim(0, y_max)
-    axarr[0,1].scatter(x, dropout_series)
+    # axarr[0,0].set_title("whole: {}".format(column))
+    # axarr[0, 0].
+    # axarr[0,0].scatter(x, whole_series)
+    #
+    # axarr[0,1].set_title('dropout: {}'.format(column))
+    # axarr[0, 1].set_ylim(0, y_max)
+    # axarr[0,1].scatter(x, dropout_series)
+    #
+    # axarr[1,0].set_title('magic: {}'.format(column))
+    # axarr[1,0].set_ylim(0, y_max)
+    # axarr[1,0].scatter(greater_zero_index, magic_series.iloc[greater_zero_index])
+    # axarr[1,0].scatter(equal_zero_index, magic_series.iloc[equal_zero_index], color="r")
+    # # axarr[1,0].scatter(x, magic_df[column])
+    #
+    # axarr[1,1].set_title("scimpute:{}".format(column))
+    # axarr[1,1].set_ylim(0, y_max)
+    #
+    #
+    # axarr[0,2].set_title("ae: {}".format(column))
+    # axarr[0,2].set_ylim(0, y_max)
+    # axarr[0,2].scatter(greater_zero_index, infer_series.iloc[greater_zero_index])
+    # axarr[0,2].scatter(equal_zero_index, infer_series.iloc[equal_zero_index], color="r")
 
-    axarr[1,0].set_title('magic: {}'.format(column))
-    axarr[1,0].set_ylim(0, y_max)
-    axarr[1,0].scatter(greater_zero_index, magic_series.iloc[greater_zero_index])
-    axarr[1,0].scatter(equal_zero_index, magic_series.iloc[equal_zero_index], color="r")
-    # axarr[1,0].scatter(x, magic_df[column])
 
-    axarr[1, 1].set_title("AE: {}".format(column))
-    axarr[1, 1].set_ylim(0, y_max)
-    axarr[1,1].scatter(greater_zero_index, infer_series.iloc[greater_zero_index])
-    axarr[1,1].scatter(equal_zero_index, infer_series.iloc[equal_zero_index], color="r")
+    cur_fig_path = save_path.replace(".png", "{}.png".format(feature_index))
+    f.savefig(cur_fig_path, dpi=600)
 
-    axarr[0,2].set_title("scimpute:{}".format(column))
-    axarr[0,2].set_ylim(0, y_max)
-    axarr[0,2].scatter(greater_zero_index, scimpute_series.iloc[greater_zero_index])
-    axarr[0,2].scatter(equal_zero_index, scimpute_series.iloc[equal_zero_index], color="r")
-
-  pp = PdfPages(save_path)
-
-  figs = None
-  if figs is None:
-    figs = [plt.figure(n) for n in plt.get_fignums()]
-  for fig in figs:
-    fig.savefig(pp, format='pdf')
-
-  pp.close()
-  print("saved fig pdfs to {}".format(save_path))
+  # pp = PdfPages(save_path)
+  # figs = None
+  # if figs is None:
+  #   figs = [plt.figure(n) for n in plt.get_fignums()]
+  # for fig in figs:
+  #   fig.savefig(pp, format='pdf', dpi=600)
+  # pp.close()
+  # print("saved fig pdfs to {}".format(save_path))
 
 
 if __name__ == "__main__":
-  # plot_save("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/test.pdf")
-  # plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/head_test.svg")
+
+  plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/complete.png")
+  # plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/headmap.png")
   # get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete")
-  scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")
+  # scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")

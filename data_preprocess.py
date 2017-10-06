@@ -96,5 +96,6 @@ if __name__ == "__main__":
   #             r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
 
-  sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6)
+  # sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6)
 
+  sub_handle("/home/bigdata/cwl/Gan/chu/chu_sc.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/chu/chu_sc.train",factor=1e6)
