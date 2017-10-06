@@ -119,7 +119,7 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path):
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
 
   df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
-  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
+  name_list = ["whole", "dropout", "magic", "scimpute", "ae", ""]
 
   print(dropout_df.shape, infer_df.shape, magic_df.shape, scimpute_df.shape)
   # Two subplots, the axes array is 1-d
@@ -128,11 +128,12 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path):
 
   columns = list(dropout_df.columns)
   x = np.arange(0, len(indexs), 1)
+
   for feature_index in feature_indexs:
 
     column = columns[feature_index]
 
-    f, axarr = plt.subplots(2,3,sharex=True)
+    f, axarr = plt.subplots(2,3)
     ax_list = axarr.flat
 
     series_list = [df[ df.columns[feature_index]] for df in df_list]
@@ -149,18 +150,24 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path):
 
     for i in range(len(name_list)):
       ax = ax_list[i]
-      ax.set_title("{}: {}".format(name_list[i], column))
+
       ax.set_xlim(-1, len(infer_df) + 1)
       ax.set_ylim(0, y_max)
+      ax.title.set_size(4)
       for label in (ax.get_xticklabels() + ax.get_yticklabels()):
         label.set_fontname('Arial')
         label.set_fontsize(5)
-      sizes = 8 ** 2
+      if i == len(name_list) - 1:
+        continue
+      ax.set_title("{}: {}".format(name_list[i], column))
+
+      circle_area = 3 ** 2
       if name_list[i] in ["magic", "scimpute", "ae"]:
-        ax.scatter(greater_zero_index, series_list[i].iloc[greater_zero_index], s=sizes)
-        ax.scatter(equal_zero_index, series_list[i].iloc[equal_zero_index], color="r", s=sizes)
+        ax.scatter(greater_zero_index, series_list[i].iloc[greater_zero_index], s=circle_area)
+        ax.scatter(equal_zero_index, series_list[i].iloc[equal_zero_index], color="r", s=circle_area)
+        ax.scatter(equal_zero_index, series_list[i].iloc[equal_zero_index], color="r", s=circle_area)
       else:
-        ax.scatter(x, series_list[i], s=sizes)
+        ax.scatter(x, series_list[i], s=circle_area)
 
     # axarr[0,0].set_title("whole: {}".format(column))
     # axarr[0, 0].
@@ -178,7 +185,6 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path):
     #
     # axarr[1,1].set_title("scimpute:{}".format(column))
     # axarr[1,1].set_ylim(0, y_max)
-    #
     #
     # axarr[0,2].set_title("ae: {}".format(column))
     # axarr[0,2].set_ylim(0, y_max)
