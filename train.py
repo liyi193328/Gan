@@ -36,10 +36,13 @@ flags.DEFINE_string("train_datapath", "data/drop80-0-1.train", "Dataset director
 flags.DEFINE_string("infer_complete_datapath", "data/drop80-0-1.infer", "path of infer complete path")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("model_name", "auto_encoder0", "model name will make dir on checkpoint_dir")
+
+flags.DEFINE_float("truly_mis_pro", None , "the prob of truly missing values for value 0")
 flags.DEFINE_float("random_sample_mu",0.0,"random mu")
 flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
+flags.DEFINE_float("normal_factor", 1e5, "normal factor")
 
-flags.DEFINE_boolean("plot_save", False, "plot fig after every test or prediction")
+flags.DEFINE_boolean("plot_complete", False, "plot fig after every test or prediction")
 flags.DEFINE_integer("test_freq_steps", 500, "test freq steps")
 flags.DEFINE_integer("save_freq_steps", 100, "save freq steps")
 flags.DEFINE_integer("log_freq_steps", 10, "log freq steps")
@@ -56,5 +59,5 @@ print("sampling dataset...")
 sample_dataset = DataSet(FLAGS.train_datapath, nrows=20)
 feature_nums = FLAGS.feature_nums or sample_dataset.feature_nums
 
-model = model_class(feature_nums, model_name=FLAGS.model_name)
+model = model_class(feature_nums, model_name=FLAGS.model_name, truly_mis_pro=FLAGS.truly_mis_pro)
 model.train(FLAGS)

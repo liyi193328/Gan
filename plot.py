@@ -42,9 +42,6 @@ def get_dataframe(test_path_or_df, infer_path_or_df):
 
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df] = raw_dataframe(test_path_or_df, infer_path_or_df)
 
-  # or_df = data_preprocess.sub_handle("/home/bigdata/cwl/data_preprocessed/expx_dropprocessed.csv", way="row_normal",
-  #                                    trans=False)
-
   base_index = 2
   indexs = np.arange(base_index, len(dropout_df), 10)
   # indexs = np.arange(0, len(dropout_df), 1)
@@ -61,7 +58,7 @@ def get_dataframe(test_path_or_df, infer_path_or_df):
 def get_similarity(test_path_or_df, infer_path_or_df):
   df_list = raw_dataframe(test_path_or_df, infer_path_or_df)
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df] = df_list
-  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
+  name_list = ["whole", "dropout", "magic", "scimpute", "autoencoder"]
   for i in range(1, len(name_list)):
     print(name_list[i] + "...")
     df = df_list[i]
@@ -74,72 +71,87 @@ def get_similarity(test_path_or_df, infer_path_or_df):
 def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100, **kwargs):
 
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
-  df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
-  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
+  df_list = [whole_df, magic_df, scimpute_df, infer_df]
+  name_list = ["whole", "magic", "scimpute", "autoencoder"]
   high_variance_columns = get_top_feature(whole_df)
   sel_df_list = [df[high_variance_columns] for df in df_list]
-  plt.rcParams["figure.figsize"] = [20, 10]
-  fig, axn = plt.subplots(1, 5, sharex=True, sharey=True)
-
+  plt.rcParams["figure.figsize"] = [15, 15]
+  fig, axn = plt.subplots(2, 2, sharex=True, sharey=True)
   ax_list = list(axn.flat)
   # cbar_ax = fig.add_axes([.91, .3, .03, .4])
   for i in range(len(ax_list)):
     ax, name, df = ax_list[i], name_list[i], sel_df_list[i]
     ax.set_title(name)
+    ax.title.set_size(25)
     sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
-    #     , cbar= i == len(ax_list) - 1)
-
   fig.savefig(save_path, dpi=600)
+
+  sel_dropout_df = dropout_df[high_variance_columns]
+  fig = plt.figure(0)
+  plt.title("dropout", fontsize=20)
+  sns.heatmap(sel_dropout_df, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=True)
+  xs = save_path.split(".")
+  dropout_path = xs[0] + ".dropout" + "." + xs[1]
+  fig.savefig(dropout_path, dpi=600)
+
   # fig.savefig(save_path.replace(".svg", ".png"), dpi=600)
 
 def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_choose_nums = 200):
 
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
   df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
-  name_list = ["whole", "dropout", "magic", "scimpute", "ae"]
-  # feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 6000, 8000, 10000]
+  name_list = ["whole", "dropout", "magic", "scimpute", "autoencoder"]
+  plt.rcParams["figure.figsize"] = [15, 15]
+
   feature_indexs = np.random.choice(range(len(df_list[0])), feature_choose_nums)
   sub_df_list = [df[df.columns[feature_indexs]] for df in df_list]
-  fig, axn = plt.subplots(1, 4, sharey=True)
+  fig, axn = plt.subplots(2, 2, sharey=True)
   ax_list = axn.flat
   for i in range(1, len(df_list)):
     x = np.reshape(sub_df_list[0].values, (-1))
     y = np.reshape(sub_df_list[i].values, (-1))
-    subplot = ax_list[i - 1]
-    subplot.set_ylim(-0.5, np.max(y) + 0.5)
-    subplot.set_xlim(-0.5, np.max(x) + 0.5)
-    subplot.set_title(name_list[i])
-    subplot.scatter(x, y)
+    ax = ax_list[i - 1]
+    ax.set_ylim(-0.5, np.max(y) + 0.5)
+    ax.set_xlim(-0.5, np.max(x) + 0.5)
+    ax.grid(False)
+    ax.set_title(name_list[i])
+    ax.title.set_size(25)
+    for label in (ax.get_xticklabels() + ax.get_yticklabels()):
+      label.set_fontname('Arial')
+      label.set_fontsize(15)
+    circle_area = 3.3 ** 2
+    ax.scatter(x, y, s=circle_area, color="b")
   if save_path is not None:
     plt.savefig(save_path, dpi=600)
 
 # def cal_corrcoef()
-def plot_complete(test_path_or_df, infer_path_or_df, save_path):
+def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False):
 
   [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
 
   df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
-  name_list = ["whole", "dropout", "magic", "scimpute", "ae", ""]
+  name_list = ["whole", "magic", "scimpute", "autoencoder"]
 
   print(dropout_df.shape, infer_df.shape, magic_df.shape, scimpute_df.shape)
   # Two subplots, the axes array is 1-d
-  feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 6000, 8000, 10000]
-  feature_index = [3, 100]
+
+  feature_indexs = np.random.choice(range(whole_df.shape[1]), 50)
+
+  # feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 5000, 5500, 6000, 7000, 8000, 9000, 10000]
 
   columns = list(dropout_df.columns)
   x = np.arange(0, len(indexs), 1)
-
+  figs = []
   for feature_index in feature_indexs:
 
     column = columns[feature_index]
 
-    f, axarr = plt.subplots(2,3)
+    fig, axarr = plt.subplots(2,2)
     ax_list = axarr.flat
-
     series_list = [df[ df.columns[feature_index]] for df in df_list]
-
     whole_series, dropout_series, magic_series, scimpute_series, infer_series = series_list
 
+    new_series_list = [whole_series, magic_series, scimpute_series, infer_series]
     y_max = 0.0
     for y in series_list:
       y_max = max(y_max, y.max())
@@ -150,64 +162,37 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path):
 
     for i in range(len(name_list)):
       ax = ax_list[i]
-
-      ax.set_xlim(-1, len(infer_df) + 1)
-      ax.set_ylim(0, y_max)
-      ax.title.set_size(4)
+      ax.set_xlim(-10, len(infer_df) + 5)
+      ax.set_ylim(-0.2, y_max)
+      ax.grid(False)
+      ax.set_title("{}: {}".format(name_list[i], column))
+      ax.title.set_size(13)
       for label in (ax.get_xticklabels() + ax.get_yticklabels()):
         label.set_fontname('Arial')
         label.set_fontsize(5)
-      if i == len(name_list) - 1:
-        continue
-      ax.set_title("{}: {}".format(name_list[i], column))
+      circle_area = 3.3 ** 2
+      ax.scatter(greater_zero_index, new_series_list[i].iloc[greater_zero_index], s=circle_area, color='b')
+      ax.scatter(equal_zero_index, new_series_list[i].iloc[equal_zero_index], color="r", s=circle_area)
 
-      circle_area = 3 ** 2
-      if name_list[i] in ["magic", "scimpute", "ae"]:
-        ax.scatter(greater_zero_index, series_list[i].iloc[greater_zero_index], s=circle_area)
-        ax.scatter(equal_zero_index, series_list[i].iloc[equal_zero_index], color="r", s=circle_area)
-        ax.scatter(equal_zero_index, series_list[i].iloc[equal_zero_index], color="r", s=circle_area)
-      else:
-        ax.scatter(x, series_list[i], s=circle_area)
+    figs.append(fig)
+    if not onepage:
+      cur_fig_path = save_path.replace(".png", "{}.png".format(feature_index))
+      fig.savefig(cur_fig_path, dpi=600)
 
-    # axarr[0,0].set_title("whole: {}".format(column))
-    # axarr[0, 0].
-    # axarr[0,0].scatter(x, whole_series)
-    #
-    # axarr[0,1].set_title('dropout: {}'.format(column))
-    # axarr[0, 1].set_ylim(0, y_max)
-    # axarr[0,1].scatter(x, dropout_series)
-    #
-    # axarr[1,0].set_title('magic: {}'.format(column))
-    # axarr[1,0].set_ylim(0, y_max)
-    # axarr[1,0].scatter(greater_zero_index, magic_series.iloc[greater_zero_index])
-    # axarr[1,0].scatter(equal_zero_index, magic_series.iloc[equal_zero_index], color="r")
-    # # axarr[1,0].scatter(x, magic_df[column])
-    #
-    # axarr[1,1].set_title("scimpute:{}".format(column))
-    # axarr[1,1].set_ylim(0, y_max)
-    #
-    # axarr[0,2].set_title("ae: {}".format(column))
-    # axarr[0,2].set_ylim(0, y_max)
-    # axarr[0,2].scatter(greater_zero_index, infer_series.iloc[greater_zero_index])
-    # axarr[0,2].scatter(equal_zero_index, infer_series.iloc[equal_zero_index], color="r")
-
-
-    cur_fig_path = save_path.replace(".png", "{}.png".format(feature_index))
-    f.savefig(cur_fig_path, dpi=600)
-
-  # pp = PdfPages(save_path)
-  # figs = None
-  # if figs is None:
-  #   figs = [plt.figure(n) for n in plt.get_fignums()]
-  # for fig in figs:
-  #   fig.savefig(pp, format='pdf', dpi=600)
-  # pp.close()
-  # print("saved fig pdfs to {}".format(save_path))
-
+  if onepage:
+    xs = save_path.split(".")
+    save_path = xs[0] + ".pdf"
+    pp = PdfPages(save_path)
+    if figs is None or len(figs) == 0:
+      figs = [plt.figure(n) for n in plt.get_fignums()]
+    for fig in figs:
+      fig.savefig(pp, format='pdf', dpi=600)
+    pp.close()
+    print("saved fig pdfs to {}".format(save_path))
 
 if __name__ == "__main__":
 
-  plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/complete.png")
-  # plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/headmap.png")
-  # get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete")
-  # scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.infer.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")
+  plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/complete.png")
+  plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/headmap.png")
+  get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete")
+  scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")

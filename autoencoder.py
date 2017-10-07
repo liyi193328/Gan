@@ -15,6 +15,7 @@ from keras.models import Model
 from keras import regularizers
 from keras import constraints
 from keras import backend as K
+from tensorflow.contrib import distributions
 
 import layers
 import shutil
@@ -27,7 +28,7 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="relu", model_name="auto_encoder"):
+  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="relu", model_name="auto_encoder", **kwargs):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -36,21 +37,36 @@ class AutoEncoder(object):
     self.activation = activation_dict[activation]
     self.learning_rate = learing_rate
     self.model_name = model_name
+    self.create_conf = kwargs
     self._create_model()
 
   def _create_model(self):
     # tf Graph input (only pictures)
-    self.X = tf.placeholder(tf.float32, [None, self.feature_num])
-    self.mask = tf.placeholder(tf.float32, [None, self.feature_num])
+    self.X = tf.placeholder(tf.float32, [None, self.feature_num], name="X")
+    self.mask = tf.placeholder(tf.float32, [None, self.feature_num], name="mask")
+    self.keep_bools = tf.placeholder(tf.float32, [None, self.feature_num], name="keep_bools")
 
     self.encoder_out = self.encoder(self.X) #through activation
     self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
-    mask_decoder_out = self.decoder_out * self.mask
-    total_valid_nums = tf.reduce_sum(self.mask)
+    origin_nums = tf.reduce_sum(self.mask)
+
+    t_mask = tf.logical_or( tf.cast(self.mask, tf.bool) , tf.cast(self.keep_bools, tf.bool) )
+    t_mask = tf.cast(t_mask, tf.float32)
+
+    # if mis_pro is not None:
+    #   bern = distributions.Bernoulli(1 - mis_pro)
+    #   keep_bools = tf.cast( bern.sample(self.X.shape), tf.bool )
+    #   self.mask = tf.logical_or( tf.cast(self.mask, tf.bool) , keep_bools)
+    #   self.mask = tf.cast(self.mask, tf.float32)
+
+    mask_decoder_out = self.decoder_out * t_mask
+    total_valid_nums = tf.reduce_sum(t_mask)
 
     tf.summary.histogram("encoder_out", self.encoder_out)
     tf.summary.histogram("decoder_out", self.decoder_out)
+    tf.summary.scalar("cal_loss_zeros_nums", total_valid_nums - origin_nums)
+    tf.summary.scalar("origin_valid_nums", origin_nums)
     tf.summary.scalar("total_valid_nums", total_valid_nums)
 
     # # ##cross entropy
@@ -63,7 +79,6 @@ class AutoEncoder(object):
 
     mask_mse = tf.reduce_sum( tf.pow(self.X - mask_decoder_out, 2) )
     self.loss = mask_mse / total_valid_nums
-
 
     tf.summary.scalar("train_loss",self.loss)
 
@@ -206,16 +221,23 @@ class AutoEncoder(object):
     print("testing for {}th...".format(step))
     dataset.reset()
     predict_data = []
+    mask_data = []
     while (1):
       batch_data = dataset.next()
       if batch_data is None:
         break
       mask = (batch_data > 0.0)
       mask = np.float32(mask)
-      predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 0})
+      mask_data.append(mask)
+      keep_bools = np.float32( np.zeros_like(batch_data) )
+
+      predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, self.keep_bools: keep_bools,
+                                                       K.learning_phase(): 0})
       predict_data.append(predicts)
     predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
-    rev_normal_predict_data = data_preprocess.reverse_normalization(predict_data, 1e6) #reverse normalization
+    mask_data = np.reshape(np.concatenate(mask_data, axis=0), (-1, dataset.feature_nums))
+    predict_data = (1.0 - mask_data) * predict_data +  dataset.data ##missing value now is completed, other values remain same
+    rev_normal_predict_data = data_preprocess.reverse_normalization(predict_data, config.normal_factor) #reverse normalization
 
     df = pd.DataFrame(predict_data, columns=dataset.columns)
     if os.path.exists(config.outDir) == False:
@@ -224,9 +246,8 @@ class AutoEncoder(object):
     if os.path.exists(outDir) == False:
       os.makedirs(outDir)
     outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
-    if config.plot_save:
-      plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf") )
-
+    if config.plot_complete:
+      plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf"), onepage=True)
     df.to_csv(outPath, index=None)
     print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
     pd.DataFrame(rev_normal_predict_data, columns=dataset.columns).to_csv(outPath.replace(".complete", ".revnormal"),
@@ -237,6 +258,8 @@ class AutoEncoder(object):
 
     dataset = DataSet(config.train_datapath, config.batch_size)
     test_dataset = DataSet(config.infer_complete_datapath, config.batch_size, onepass=True)
+    create_conf = self.create_conf
+    truly_mis_pro = create_conf.get("truly_mis_pro")
 
     steps = dataset.steps * config.epoch
     print("total {} steps...".format(steps))
@@ -274,14 +297,30 @@ class AutoEncoder(object):
         batch_data = dataset.next()
         mask = (batch_data > 0.0)
         mask = np.float32(mask)
-        # print(np.shape(mask), mask.dtype)
+
+        ##mask = keep_bools | mask
+        if truly_mis_pro is None:
+          keep_bools = np.zeros_like(batch_data)
+        else:
+          zero_nums = np.sum( batch_data == 0.0 )
+          q = np.random.binomial(1, 1.0 - truly_mis_pro, (zero_nums) )
+          keep_bools = np.zeros_like(batch_data)
+          keep_bools[ np.where(batch_data == 0.0) ] = q
+
+          # keep_bools = ( np.random.randn(*batch_data.shape) < truly_mis_pro )
+        keep_bools = np.float32(keep_bools)
 
         if step % config.save_freq_steps != 0:
-          _, loss = session.run([self.apply_grads, self.loss],
-                                           feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 1})
+          _, loss = session.run( [self.apply_grads, self.loss],
+                                           feed_dict={ self.X: batch_data, self.mask: mask, self.keep_bools: keep_bools,
+                                                      K.learning_phase(): 1})
         else:
-          _, summary_str, loss = session.run([self.apply_grads, self.merged_summary_op, self.loss],
-                                             feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 1})
+          _, summary_str, loss = session.run( [self.apply_grads, self.merged_summary_op, self.loss],
+                                             feed_dict={ self.X: batch_data, self.mask: mask,
+                                                         self.keep_bools: keep_bools,
+                                                        K.learning_phase(): 1
+                                                         }
+                                              )
 
         if step % config.log_freq_steps == 0:
           print("step {}th, loss: {}".format(step, loss))

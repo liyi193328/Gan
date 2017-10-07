@@ -52,7 +52,6 @@ trans_map = {
   "log": log
 }
 
-
 def sub_handle(path, way,ind_col=0, trans=True ,save_path=None,**kwargs):
   data = pd.read_csv(path, header=0, sep=",", index_col=ind_col)
   print("read from {} done".format(path))
