@@ -9,20 +9,21 @@ import sys
 import pandas as pd
 import numpy as np
 import codecs
-
+from sklearn.utils.extmath import softmax
 
 # train_path = r"/home/bigdata/cwl/data_preprocessed/reprocess.csv"
 # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
-def reverse_normalization(data, factor=1e5):
-  exp = np.exp(data) - 1
+def reverse_normalization(data, factor=1e5, **kwargs):
+  data[ data >= 13.5 ] = 13.5
+  exp = np.expm1(data)
   row_sum = np.sum(exp, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
   div = np.divide(exp, row_sum)
   div = np.log(1 + factor * div)
   return div
 
-def row_normalization(data, factor=1e5):
+def row_normalization(data, factor=1e5, **kwargs):
   row_sum = np.sum(data, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
 
@@ -57,9 +58,18 @@ def sub_handle(path, way,ind_col=0, trans=True ,save_path=None,**kwargs):
   print("read from {} done".format(path))
   if trans:
     data = data.transpose()
-  columns = list(data.columns)
   print("{} data_shape is {}".format(path, data.shape))
 
+  print("origin col nums: {}".format(len(data.columns)))
+  if kwargs.get("del_zero_cols") is not None:
+    x = kwargs.get("del_zero_cols")
+    col_list = []
+    for col in data.columns:
+      if (data[col] > 0.0).sum() >= x:
+        col_list.append(col)
+    data = data[col_list]
+  print("now col nums: {}".format(len(data.columns)))
+  columns = list(data.columns)
   data = data.values
   data = trans_map[way](data,**kwargs)
   data = pd.DataFrame(data, columns=columns)
@@ -80,7 +90,6 @@ def handle_data(train_path, test_path, save_train_path, save_test_path, way = "d
   test_df.to_csv(save_test_path, index=False)
   print("save to {}".format(save_test_path))
 
-
 if __name__ == "__main__":
 
   # train_path = r"/home/bigdata/cwl/data_preprocessed/train_drop80.csv"
@@ -95,6 +104,12 @@ if __name__ == "__main__":
   #             r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
 
-  # sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6)
+  sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6, del_zero_cols=20)
 
-  sub_handle("/home/bigdata/cwl/Gan/chu/chu_sc.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/chu/chu_sc.train",factor=1e6)
+  # sub_handle("/home/bigdata/cwl/Gan/chu/chu_sc_handle.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/chu/chu_sc_handle.train",factor=1e6)
+
+  # sub_handle("/home/bigdata/cwl/Gan/cluster/kolod.csv", "same", save_path="/home/bigdata/cwl/Gan/data/cluster/kolod.train")
+  # sub_handle("/home/bigdata/cwl/Gan/cluster/usoskin.csv", "same", save_path="/home/bigdata/cwl/Gan/data/cluster/usoskin.train")
+  # sub_handle("/home/bigdata/cwl/Gan/cluster/pollen.csv", "same", save_path="/home/bigdata/cwl/Gan/data/cluster/pollen.train")
+
+

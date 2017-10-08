@@ -40,7 +40,7 @@ flags.DEFINE_string("model_name", "auto_encoder0", "model name will make dir on 
 flags.DEFINE_float("truly_mis_pro", None , "the prob of truly missing values for value 0")
 flags.DEFINE_float("random_sample_mu",0.0,"random mu")
 flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
-flags.DEFINE_float("normal_factor", 1e5, "normal factor")
+flags.DEFINE_float("normal_factor", 1e6, "normal factor")
 
 flags.DEFINE_boolean("plot_complete", False, "plot fig after every test or prediction")
 flags.DEFINE_integer("test_freq_steps", 500, "test freq steps")

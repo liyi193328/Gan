@@ -248,6 +248,7 @@ class AutoEncoder(object):
     outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
     if config.plot_complete:
       plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf"), onepage=True)
+
     df.to_csv(outPath, index=None)
     print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
     pd.DataFrame(rev_normal_predict_data, columns=dataset.columns).to_csv(outPath.replace(".complete", ".revnormal"),
