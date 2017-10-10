@@ -15,7 +15,6 @@ from sklearn.utils.extmath import softmax
 # infer_path = r"/home/bigdata/cwl/data_preprocessed/test_drop80.csv"
 
 def reverse_normalization(data, factor=1e5, **kwargs):
-  data[ data >= 13.5 ] = 13.5
   exp = np.expm1(data)
   row_sum = np.sum(exp, axis=1)
   row_sum = np.expand_dims(row_sum, 1)
@@ -103,8 +102,9 @@ if __name__ == "__main__":
   # handle_data(train_path, infer_path, r"/home/bigdata/cwl/Gan/data/drop60_log.train",
   #             r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
+  sub_handle("/home/bigdata/cwl/data_preprocessed/test_drop80.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/drop80_log.infer",factor=1e5)
 
-  sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6, del_zero_cols=20)
+  # sub_handle("/home/bigdata/cwl/Gan/brain/brain_10.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/brain/brain_10.train",factor=1e6, del_zero_cols=20)
 
   # sub_handle("/home/bigdata/cwl/Gan/chu/chu_sc_handle.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/chu/chu_sc_handle.train",factor=1e6)
 

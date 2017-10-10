@@ -24,23 +24,23 @@ def get_top_feature(df, top=100):
   top_vars_index = x.argsort()[-top:][::-1]
   return df.columns[top_vars_index]
 
-def raw_dataframe(test_path_or_df, infer_path_or_df):
+def raw_dataframe(test_path_or_df, infer_path_or_df, **kwargs):
   if type(test_path_or_df) == str:
-    dropout_df = data_preprocess.sub_handle(test_path_or_df,way="reverse",ind_col=None, trans=False)
-    infer_df = data_preprocess.sub_handle(infer_path_or_df,way="reverse",ind_col=None,trans=False)
+    dropout_df = data_preprocess.sub_handle(test_path_or_df,way="reverse",ind_col=None, trans=False, **kwargs)
+    infer_df = data_preprocess.sub_handle(infer_path_or_df,way="reverse",ind_col=None,trans=False, **kwargs)
   else:
     dropout_df = test_path_or_df
     infer_df = infer_path_or_df
 
   magic_df = data_preprocess.sub_handle("/home/bigdata/cwl/Gan/prediction/drop80_magic.csv", way="row_normal",ind_col=None, trans=False)
-  whole_df = data_preprocess.sub_handle("/home/bigdata/cwl/data_preprocessed/process_whole_test_drop80.csv", way="row_normal", ind_col=0, trans=True)
-  scimpute_df = data_preprocess.sub_handle("/home/bigdata/scimpute_count.csv", way="row_normal", ind_col=0, trans=True)
+  whole_df = data_preprocess.sub_handle("/home/bigdata/cwl/data_preprocessed/process_whole_test_drop80.csv", way="row_normal", ind_col=0, trans=True, **kwargs)
+  scimpute_df = data_preprocess.sub_handle("/home/bigdata/scimpute_count.csv", way="row_normal", ind_col=0, trans=True, **kwargs)
 
   return [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
 
-def get_dataframe(test_path_or_df, infer_path_or_df):
+def get_dataframe(test_path_or_df, infer_path_or_df, **kwargs):
 
-  [whole_df, dropout_df, magic_df, scimpute_df, infer_df] = raw_dataframe(test_path_or_df, infer_path_or_df)
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df] = raw_dataframe(test_path_or_df, infer_path_or_df, **kwargs)
 
   base_index = 2
   indexs = np.arange(base_index, len(dropout_df), 10)
@@ -70,22 +70,22 @@ def get_similarity(test_path_or_df, infer_path_or_df):
 
 def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100, **kwargs):
 
-  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df, **kwargs)
   df_list = [whole_df, magic_df, scimpute_df, infer_df]
   name_list = ["whole", "magic", "scimpute", "autoencoder"]
   high_variance_columns = get_top_feature(whole_df)
   sel_df_list = [df[high_variance_columns] for df in df_list]
   plt.rcParams["figure.figsize"] = [15, 15]
 
-  # fig, axn = plt.subplots(2, 2, sharex=True, sharey=True)
-  # ax_list = list(axn.flat)
-  # # cbar_ax = fig.add_axes([.91, .3, .03, .4])
-  # for i in range(len(ax_list)):
-  #   ax, name, df = ax_list[i], name_list[i], sel_df_list[i]
-  #   ax.set_title(name)
-  #   ax.title.set_size(25)
-  #   sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
-  # fig.savefig(save_path, dpi=600)
+  fig, axn = plt.subplots(2, 2, sharex=True, sharey=True)
+  ax_list = list(axn.flat)
+  # cbar_ax = fig.add_axes([.91, .3, .03, .4])
+  for i in range(len(ax_list)):
+    ax, name, df = ax_list[i], name_list[i], sel_df_list[i]
+    ax.set_title(name)
+    ax.title.set_size(25)
+    sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
+  fig.savefig(save_path, dpi=600)
 
   sel_dropout_df = dropout_df[high_variance_columns]
   fig = plt.figure(0)
@@ -97,9 +97,9 @@ def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100,
 
   # fig.savefig(save_path.replace(".svg", ".png"), dpi=600)
 
-def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_choose_nums = 200):
+def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_choose_nums = 200, **kwargs):
 
-  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df, **kwargs)
   df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
   name_list = ["whole", "dropout", "magic", "scimpute", "autoencoder"]
   plt.rcParams["figure.figsize"] = [15, 15]
@@ -126,9 +126,9 @@ def scatter_compare(test_path_or_df, infer_path_or_df, save_path=None, feature_c
     plt.savefig(save_path, dpi=600)
 
 # def cal_corrcoef()
-def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False):
+def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False, **kwargs):
 
-  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df)
+  [whole_df, dropout_df, magic_df, scimpute_df, infer_df, indexs] = get_dataframe(test_path_or_df, infer_path_or_df, **kwargs)
 
   df_list = [whole_df, dropout_df, magic_df, scimpute_df, infer_df]
   name_list = ["whole", "magic", "scimpute", "autoencoder"]
@@ -136,9 +136,9 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False):
   print(dropout_df.shape, infer_df.shape, magic_df.shape, scimpute_df.shape)
   # Two subplots, the axes array is 1-d
 
-  # feature_indexs = np.random.choice(range(whole_df.shape[1]), 50)
+  feature_indexs = np.random.choice(range(whole_df.shape[1]), 50)
 
-  feature_indexs = [3000]
+  # feature_indexs = [3000]
 
   # feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 5000, 5500, 6000, 7000, 8000, 9000, 10000]
 
@@ -195,7 +195,7 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False):
 
 if __name__ == "__main__":
 
-  # plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/complete.png")
-  plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/headmap.png")
+  plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/drop80_test/drop80_test.3000.infer.complete", "/home/bigdata/cwl/Gan/prediction/drop80_test/complete.png", factor=1e5)
+  plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/drop80_test.3000.infer.complete", "/home/bigdata/cwl/Gan/prediction/drop80_test/headmap.png", factor=1e5)
   # get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete")
-  # scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")
+  scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/drop80_test.3000.infer.complete", "/home/bigdata/cwl/Gan/prediction/drop80_test/scatter_compare.png", factor=1e5)
