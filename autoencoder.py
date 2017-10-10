@@ -245,7 +245,7 @@ class AutoEncoder(object):
     outDir = os.path.join(config.outDir, self.model_name)
     if os.path.exists(outDir) == False:
       os.makedirs(outDir)
-    outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
+    outPath = os.path.join(outDir, "{}.infer.complete".format(self.model_name))
     if config.plot_complete:
       plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf"), onepage=True)
 

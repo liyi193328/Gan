@@ -77,15 +77,15 @@ def plot_headmap(test_path_or_df, infer_path_or_df, save_path, top_features=100,
   sel_df_list = [df[high_variance_columns] for df in df_list]
   plt.rcParams["figure.figsize"] = [15, 15]
 
-  # fig, axn = plt.subplots(2, 2, sharex=True, sharey=True)
-  # ax_list = list(axn.flat)
-  # # cbar_ax = fig.add_axes([.91, .3, .03, .4])
-  # for i in range(len(ax_list)):
-  #   ax, name, df = ax_list[i], name_list[i], sel_df_list[i]
-  #   ax.set_title(name)
-  #   ax.title.set_size(25)
-  #   sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
-  # fig.savefig(save_path, dpi=600)
+  fig, axn = plt.subplots(2, 2, sharex=True, sharey=True)
+  ax_list = list(axn.flat)
+  # cbar_ax = fig.add_axes([.91, .3, .03, .4])
+  for i in range(len(ax_list)):
+    ax, name, df = ax_list[i], name_list[i], sel_df_list[i]
+    ax.set_title(name)
+    ax.title.set_size(25)
+    sns.heatmap(df, ax=ax, cmap="YlGnBu", xticklabels=False, yticklabels=False, cbar=False)
+  fig.savefig(save_path, dpi=600)
 
   sel_dropout_df = dropout_df[high_variance_columns]
   fig = plt.figure(0)
@@ -136,9 +136,9 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False):
   print(dropout_df.shape, infer_df.shape, magic_df.shape, scimpute_df.shape)
   # Two subplots, the axes array is 1-d
 
-  # feature_indexs = np.random.choice(range(whole_df.shape[1]), 50)
+  feature_indexs = np.random.choice(range(whole_df.shape[1]), 50)
 
-  feature_indexs = [3000]
+  # feature_indexs = [3000]
 
   # feature_indexs = [3, 100, 500, 1000, 2000, 3000, 4000, 5000, 5500, 6000, 7000, 8000, 9000, 10000]
 
@@ -195,7 +195,7 @@ def plot_complete(test_path_or_df, infer_path_or_df, save_path, onepage=False):
 
 if __name__ == "__main__":
 
-  # plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/complete.png")
-  plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/headmap.png")
+  plot_complete("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/drop80_test/drop80_test.3000.infer.complete", "/home/bigdata/cwl/Gan/prediction/drop80_test/drop80_test.png")
+  plot_headmap("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/drop80_test/drop80_test.3000.infer.complete", "/home/bigdata/cwl/Gan/prediction/drop80_test/drop80_headmap.png")
   # get_similarity("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete")
-  # scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/log_sigmoid.3500.fix.complete", "/home/bigdata/cwl/Gan/prediction/log_sigmoid/scatter_compare.png")
+  scatter_compare("/home/bigdata/cwl/Gan/data/drop80_log.infer", "/home/bigdata/cwl/Gan/prediction/drop80_test/drop80_test.3000.infer.complete", "/home/bigdata/cwl/Gan/prediction/drop80_test/scatter_compare.png")
