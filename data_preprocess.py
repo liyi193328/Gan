@@ -104,9 +104,12 @@ if __name__ == "__main__":
   #             r"/home/bigdata/cwl/Gan/data/drop60_log.infer", way="log")
 
 
-  sub_handle("/home/bigdata/cwl/Gan/cluster/h_kolod.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/cluster/h_kolod.train",factor=1e6, del_zero_cols=20)
-  sub_handle("/home/bigdata/cwl/Gan/cluster/h_usoskin.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/cluster/h_usoskin.train",factor=1e6, del_zero_cols=20)
-  sub_handle("/home/bigdata/cwl/Gan/cluster/h_pollen.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/cluster/h_pollen.train",factor=1e6, del_zero_cols=20)
+  sub_handle("/home/bigdata/cwl/Gan/cluster/h_kolod.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/cluster/h_kolod.train",factor=1e6)
+  sub_handle("/home/bigdata/cwl/Gan/cluster/h_usoskin.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/cluster/h_usoskin.train",factor=1e6)
+  sub_handle("/home/bigdata/cwl/Gan/cluster/h_pollen.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/cluster/h_pollen.train",factor=1e6)
+  sub_handle("/home/bigdata/cwl/Gan/cluster/h_usoskin_fgene.csv", "row_normal",save_path="/home/bigdata/cwl/Gan/data/cluster/h_usoskin_fgene.train", factor=1e6)
+  sub_handle("/home/bigdata/cwl/Gan/cluster/h_brain_fgene.csv", "row_normal",save_path="/home/bigdata/cwl/Gan/data/cluster/h_brain_fgene.train", factor=1e6)
+  sub_handle("/home/bigdata/cwl/Gan/cluster/h_brain.csv", "row_normal",save_path="/home/bigdata/cwl/Gan/data/cluster/h_brain.train", factor=1e6)
 
   # sub_handle("/home/bigdata/cwl/Gan/chu/chu_sc_handle.csv", "row_normal", save_path="/home/bigdata/cwl/Gan/data/chu/chu_sc_handle.train",factor=1e6)
 
