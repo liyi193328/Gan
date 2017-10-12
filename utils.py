@@ -9,7 +9,7 @@ def MaskData(batch_data, missing_val):
   mask[ np.equal(batch_data, missing_val) ] = 0
   return mask
 
-def get_mask_probs(datapath_or):
+def get_mask_probs(datapath):
   df = pd.read_csv(datapath, index_col=0).transpose()
   mask_probs = np.random.uniform(0.0, 1.0, df.shape)
 
