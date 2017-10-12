@@ -28,7 +28,8 @@ activation_dict = {
 
 class AutoEncoder(object):
 
-  def __init__(self, feature_num, hidden_size=None, learing_rate=0.001, activation="relu", model_name="auto_encoder", **kwargs):
+  def __init__(self, feature_num, hidden_size=None, dropout = None,
+               learing_rate=0.001, activation="relu", model_name="auto_encoder", **kwargs):
 
     self.feature_num = feature_num
     if hidden_size is None:
@@ -38,6 +39,7 @@ class AutoEncoder(object):
     self.learning_rate = learing_rate
     self.model_name = model_name
     self.create_conf = kwargs
+    self.dropout = dropout
     self._create_model()
 
   def _create_model(self):
@@ -47,6 +49,8 @@ class AutoEncoder(object):
     self.keep_bools = tf.placeholder(tf.float32, [None, self.feature_num], name="keep_bools")
 
     self.encoder_out = self.encoder(self.X) #through activation
+    if self.dropout > 0.0:
+      self.encoder_out = keras.layers.Dropout(self.dropout)
     self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
     origin_nums = tf.reduce_sum(self.mask)
@@ -245,7 +249,7 @@ class AutoEncoder(object):
     outDir = os.path.join(config.outDir, self.model_name)
     if os.path.exists(outDir) == False:
       os.makedirs(outDir)
-    outPath = os.path.join(outDir, "{}.{}.infer.complete".format(self.model_name, step))
+    outPath = os.path.join(outDir, "{}.infer.complete".format(self.model_name))
     if config.plot_complete:
       plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf"), onepage=True)
 
@@ -300,7 +304,7 @@ class AutoEncoder(object):
         mask = np.float32(mask)
 
         ##mask = keep_bools | mask
-        if truly_mis_pro is None:
+        if truly_mis_pro > 0.0:
           keep_bools = np.zeros_like(batch_data)
         else:
           zero_nums = np.sum( batch_data == 0.0 )
