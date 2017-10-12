@@ -38,6 +38,7 @@ num_input = 13416 # MNIST data input (img shape: 28*28)
 
 # tf Graph input (only pictures)
 X = tf.placeholder("float32", [None, num_input])
+mask = tf.placeholder("float32", [None, num_input])
 
 weights = {
     'encoder_h1': tf.Variable(tf.random_normal([num_input, num_hidden_1])),
@@ -81,8 +82,7 @@ decoder_op = decoder(encoder_op)
 y_pred = decoder_op
 # Targets (Labels) are the input data.
 y_true = X
-mask = y_true > 0.0
-mask = np.float32(mask)
+
 
 # Define loss and optimizer, minimize the squared error
 loss = tf.reduce_mean(tf.pow(y_true - y_pred*mask, 2))
@@ -106,8 +106,10 @@ with tf.Session() as sess:
         # Prepare Data
         # Get the next batch of MNIST data (only images are needed, not labels)
         batch_x = traindata.next()
+        batch_mask = np.float32(batch_x > 0.0)
+
         # Run optimization op (backprop) and cost op (to get loss value)
-        _, l = sess.run([optimizer, loss], feed_dict={X: batch_x, mask: })
+        _, l = sess.run([optimizer, loss], feed_dict={X: batch_x, mask: batch_mask})
         # Display logs per step
         if i % display_step == 0 or i == 1:
             print('Step %i: Minibatch Loss: %f' % (i, l))
@@ -119,8 +121,7 @@ with tf.Session() as sess:
         batch_x = testdata.next()
         if batch_x is None:
           break
-        mask = (batch_x > 0.0)
-        mask = np.float(mask)
+        batch_mask = np.float32(mask)
         predicts = sess.run(decoder_op, feed_dict={X: batch_x})
         predict_data.append(predicts)
     predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, testdata.feature_nums))
