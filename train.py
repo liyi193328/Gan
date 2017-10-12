@@ -37,8 +37,9 @@ flags.DEFINE_string("infer_complete_datapath", "data/drop80-0-1.infer", "path of
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("model_name", "auto_encoder0", "model name will make dir on checkpoint_dir")
 
-flags.DEFINE_float("truly_mis_pro", -1.0 , "the prob of truly missing values for value 0[-1 mean don't random mask, all is missing]")
-flags.DEFINE_float("dropout", -1.0, "dropout layer pro[ < 0 mean no layer")
+flags.DEFINE_float("truly_mis_pro", -1.0 , "the prob of truly missing values for value 0 [ truly_mis_pro <=0 mean don't random mask, all is missing]")
+flags.DEFINE_string("random_mask_path", "", "the path of probs of letting value 0's prob trained")
+flags.DEFINE_float("dropout", -1.0, "dropout layer pro[ <= 0 mean no layer")
 flags.DEFINE_float("random_sample_mu",0.0,"random mu")
 flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
 flags.DEFINE_float("normal_factor", 1e6, "normal factor")

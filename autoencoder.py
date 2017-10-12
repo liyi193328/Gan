@@ -17,6 +17,7 @@ from keras import constraints
 from keras import backend as K
 from tensorflow.contrib import distributions
 
+import utils
 import layers
 import shutil
 
@@ -50,7 +51,7 @@ class AutoEncoder(object):
 
     self.encoder_out = self.encoder(self.X) #through activation
     if self.dropout > 0.0:
-      self.encoder_out = keras.layers.Dropout(self.dropout)
+      self.encoder_out = keras.layers.Dropout(self.dropout)(self.encoder_out)
     self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
     origin_nums = tf.reduce_sum(self.mask)
@@ -265,8 +266,9 @@ class AutoEncoder(object):
     test_dataset = DataSet(config.infer_complete_datapath, config.batch_size, onepass=True)
     create_conf = self.create_conf
     truly_mis_pro = create_conf.get("truly_mis_pro")
-
+    random_mask_path = config.get("random_mask_path")
     steps = dataset.steps * config.epoch
+    mask_probs = pd.read_csv(random_mask_path, index_col=0).transpose().values
     print("total {} steps...".format(steps))
 
     sample_dirs = os.path.join("samples", self.model_name)
@@ -304,15 +306,18 @@ class AutoEncoder(object):
         mask = np.float32(mask)
 
         ##mask = keep_bools | mask
-        if truly_mis_pro > 0.0:
-          keep_bools = np.zeros_like(batch_data)
+        if random_mask_path is not None or random_mask_path != "":
+          probs = np.random.uniform(0.0, 1.0, batch_data.shape)
+          keep_bools = (mask_probs >= probs)
         else:
-          zero_nums = np.sum( batch_data == 0.0 )
-          q = np.random.binomial(1, 1.0 - truly_mis_pro, (zero_nums) )
-          keep_bools = np.zeros_like(batch_data)
-          keep_bools[ np.where(batch_data == 0.0) ] = q
+          if truly_mis_pro <= 0.0:
+            keep_bools = np.zeros_like(batch_data)
+          else:
+            zero_nums = np.sum( batch_data == 0.0 )
+            q = np.random.binomial(1, 1.0 - truly_mis_pro, (zero_nums) )
+            keep_bools = np.zeros_like(batch_data)
+            keep_bools[ np.where(batch_data == 0.0) ] = q
 
-          # keep_bools = ( np.random.randn(*batch_data.shape) < truly_mis_pro )
         keep_bools = np.float32(keep_bools)
 
         if step % config.save_freq_steps != 0:
