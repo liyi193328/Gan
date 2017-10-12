@@ -10,7 +10,13 @@ script_path = "/home/bigdata/cwl/Gan/train.py"
 done_path = "/home/bigdata/cwl/Gan/done_train.txt"
 
 mask_dir = "/home/bigdata/cwl/Gan/cluster/mask"
-mask_file_suffixs = [v.split(".")[0] for v in os.listdir(mask_dir)]
+mask_file_suffixs_dict = {}
+for x in os.listdir(mask_dir):
+  t = x.split(".")[0]
+  q = t.split("_")
+  name = q[:-1]
+  name = "_".join(name)
+  mask_file_suffixs_dict[name] = x
 
 f = codecs.open(done_path, "r", "utf-8")
 done_model_names = [v.strip() for v in f.readlines()]
@@ -18,23 +24,24 @@ f.close()
 f = codecs.open(done_path, "w", "utf-8")
 
 done_model_names = []
+print(mask_file_suffixs_dict)
 
 for file in os.listdir(data_dir):
   path = os.path.join(data_dir, file)
   name = file.split(".")[0]
   flag = False
   mask_path = ""
-  for mask_file in mask_file_suffixs:
+  for mask_file in mask_file_suffixs_dict:
     if mask_file in name:
       flag = True
-      mask_path = os.path.join(mask_dir, mask_file)
+      mask_path = os.path.join(mask_dir, mask_file_suffixs_dict[mask_file])
 
   if flag is True:
     for dropout in [0]:
       for random_mask in [0]:
         drop_flag = dropout
         random_mask_flag = random_mask
-        model_name = "{}_{}_{}".format(name, dropout, random_mask)
+        model_name = "{}_{}_{}_rp_{}".format(name, dropout, random_mask, 1)
         if model_name in done_model_names:
           print("{} has been trained before".format(model_name))
           continue
