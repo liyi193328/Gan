@@ -50,7 +50,7 @@ class AutoEncoder(object):
 
     self.encoder_out = self.encoder(self.X) #through activation
     if self.dropout > 0.0:
-      self.encoder_out = keras.layers.Dropout(self.dropout)
+      self.encoder_out = keras.layers.Dropout(self.dropout)(self.encoder_out)
     self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
     origin_nums = tf.reduce_sum(self.mask)

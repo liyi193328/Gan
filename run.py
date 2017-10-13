@@ -6,6 +6,7 @@ import subprocess
 data_dir = "/home/bigdata/cwl/Gan/data/cluster"
 python_path = "/home/bigdata/anaconda3/bin/python"
 script_path = "/home/bigdata/cwl/Gan/train.py"
+done_list = ["h_pollen_0_0", "h_pollen_0_0.9"]
 
 for file in os.listdir(data_dir):
   path = os.path.join(data_dir, file)
@@ -15,6 +16,9 @@ for file in os.listdir(data_dir):
       drop_flag = dropout
       random_mask_flag = random_mask
       model_name = "{}_{}_{}".format(name, dropout, random_mask)
+      if model_name in done_list:
+        print("{} done before".format(model_name))
+        continue
       par_dict = {
         "python": python_path,
         "script_path": script_path,
