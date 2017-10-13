@@ -37,8 +37,9 @@ flags.DEFINE_string("infer_complete_datapath", "data/drop80-0-1.infer", "path of
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("model_name", "auto_encoder0", "model name will make dir on checkpoint_dir")
 
-flags.DEFINE_float("truly_mis_pro", -1.0 , "the prob of truly missing values for value 0[-1 mean don't random mask, all is missing]")
-flags.DEFINE_float("dropout", -1.0, "dropout layer pro[ < 0 mean no layer")
+flags.DEFINE_float("truly_mis_pro", -1.0 , "the prob of truly missing values for value 0 [ truly_mis_pro <=0 mean don't random mask, all is missing]")
+flags.DEFINE_string("random_mask_path", "None", "the path of probs of letting value 0's prob trained[None]")
+flags.DEFINE_float("dropout", -1.0, "dropout layer pro[ <= 0 mean no layer")
 flags.DEFINE_float("random_sample_mu",0.0,"random mu")
 flags.DEFINE_float("random_sample_sigma", 1.0, "random sigma")
 flags.DEFINE_float("normal_factor", 1e6, "normal factor")
@@ -50,6 +51,7 @@ flags.DEFINE_integer("log_freq_steps", 10, "log freq steps")
 
 flags.DEFINE_boolean("load_checkpoint", False, "if have checkpoint, whether load prev model first")
 flags.DEFINE_integer("sample_steps", 500, "every sample_steps, will sample the generate mini batch data")
+flags.DEFINE_float("gpu_ratio", 1.0, "per_process_gpu_memory_fraction[1.0]")
 
 flags.DEFINE_string('outDir', 'prediction', "output dir")
 

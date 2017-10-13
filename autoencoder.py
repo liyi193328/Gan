@@ -17,8 +17,11 @@ from keras import constraints
 from keras import backend as K
 from tensorflow.contrib import distributions
 
+import utils
 import layers
 import shutil
+import time
+from datetime import datetime
 
 activation_dict = {
   "tanh":tf.tanh,
@@ -49,8 +52,6 @@ class AutoEncoder(object):
     self.keep_bools = tf.placeholder(tf.float32, [None, self.feature_num], name="keep_bools")
 
     self.encoder_out = self.encoder(self.X) #through activation
-    if self.dropout > 0.0:
-      self.encoder_out = keras.layers.Dropout(self.dropout)(self.encoder_out)
     self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
 
     origin_nums = tf.reduce_sum(self.mask)
@@ -114,6 +115,8 @@ class AutoEncoder(object):
     with tf.variable_scope("encoder"):
 
       out = Dense(self.feature_num // 4, activation="relu")(input)
+      if self.dropout > 0.0:
+        out = keras.layers.Dropout(self.dropout)(out)
       out = Dense(self.feature_num // 16, activation="relu")(out)
       out = Dense(self.feature_num // 32)(out)
       out = keras.layers.advanced_activations.PReLU(alpha_initializer="zero", weights=None)(out)
@@ -133,6 +136,9 @@ class AutoEncoder(object):
       out = Dense(self.feature_num // 16, activation="relu")(input)
       out = Dense(self.feature_num // 4, activation="relu")(out)
       # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
+
+      if self.dropout > 0.0:
+        out = keras.layers.Dropout(self.dropout)(out)
       out = Dense(self.feature_num, kernel_regularizer=regularizers.l2(0.01) )(out)
 
       out = keras.layers.advanced_activations.PReLU(weights=None, alpha_initializer="zero")(out)
@@ -224,7 +230,7 @@ class AutoEncoder(object):
   def predict_tmp(self, sess, step, dataset, config):
     print("testing for {}th...".format(step))
     dataset.reset()
-    predict_data = []
+    decoder_out_list, encoder_out_list = [], []
     mask_data = []
     while (1):
       batch_data = dataset.next()
@@ -235,15 +241,18 @@ class AutoEncoder(object):
       mask_data.append(mask)
       keep_bools = np.float32( np.zeros_like(batch_data) )
 
-      predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, self.keep_bools: keep_bools,
+      decoder_out, encoder_out = sess.run([self.decoder_out, self.encoder_out], feed_dict={self.X: batch_data, self.mask: mask, self.keep_bools: keep_bools,
                                                        K.learning_phase(): 0})
-      predict_data.append(predicts)
-    predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
+      decoder_out_list.append(decoder_out)
+      encoder_out_list.append(encoder_out)
+    decoder_out = np.reshape(np.concatenate(decoder_out_list, axis=0), (-1, dataset.feature_nums))
+    encoder_out = np.reshape(np.concatenate(encoder_out_list, axis=0), (-1, self.feature_num // 32))
     mask_data = np.reshape(np.concatenate(mask_data, axis=0), (-1, dataset.feature_nums))
-    predict_data = (1.0 - mask_data) * predict_data +  dataset.data ##missing value now is completed, other values remain same
-    rev_normal_predict_data = data_preprocess.reverse_normalization(predict_data, config.normal_factor) #reverse normalization
+    decoder_out = (1.0 - mask_data) * decoder_out +  dataset.data ##missing value now is completed, other values remain same
+    rev_normal_predict_data = data_preprocess.reverse_normalization(decoder_out, config.normal_factor) #reverse normalization
 
-    df = pd.DataFrame(predict_data, columns=dataset.columns)
+    df = pd.DataFrame(decoder_out, columns=dataset.columns)
+
     if os.path.exists(config.outDir) == False:
       os.makedirs(config.outDir)
     outDir = os.path.join(config.outDir, self.model_name)
@@ -254,19 +263,25 @@ class AutoEncoder(object):
       plot.plot_complete(pd.DataFrame(dataset.data, columns=dataset.columns), df, outPath.replace("infer.complete", "pdf"), onepage=True)
 
     df.to_csv(outPath, index=None)
+
     print("save complete data from {} to {}".format(config.infer_complete_datapath, outPath))
-    pd.DataFrame(rev_normal_predict_data, columns=dataset.columns).to_csv(outPath.replace(".complete", ".revnormal"),
-                                                                        index=None)
+    pd.DataFrame(rev_normal_predict_data, columns=dataset.columns).to_csv(outPath.replace(".complete", ".revnormal"),index=None)
     print("save rev normal data to {}".format(outPath.replace(".complete", ".revnormal")))
+
+    pd.DataFrame(encoder_out).to_csv(outPath.replace(".infer.complete", ".encoder.out"))
 
   def train(self, config):
 
+    begin = time.clock()
     dataset = DataSet(config.train_datapath, config.batch_size)
     test_dataset = DataSet(config.infer_complete_datapath, config.batch_size, onepass=True)
     create_conf = self.create_conf
     truly_mis_pro = create_conf.get("truly_mis_pro")
-
+    random_mask_path = config.random_mask_path
     steps = dataset.steps * config.epoch
+    # print("random_mask_path:", random_mask_path)
+    if random_mask_path != "None":
+      mask_probs = pd.read_csv(random_mask_path, index_col=0).transpose().values
     print("total {} steps...".format(steps))
 
     sample_dirs = os.path.join("samples", self.model_name)
@@ -275,6 +290,9 @@ class AutoEncoder(object):
     for dir in [sample_dirs, log_dirs]:
       if os.path.exists(dir) == False:
         os.makedirs(dir)
+
+    # gpu_conf = tf.ConfigProto()
+    # gpu_conf.gpu_options.per_process_gpu_memory_fraction = config.gpu_ratio
 
     with tf.Session() as session:
 
@@ -304,15 +322,20 @@ class AutoEncoder(object):
         mask = np.float32(mask)
 
         ##mask = keep_bools | mask
-        if truly_mis_pro > 0.0:
-          keep_bools = np.zeros_like(batch_data)
+        if random_mask_path != "None":
+          probs = np.random.uniform(0.0, 1.0, batch_data.shape)
+          xp, yp = probs.shape
+          mask_probs_sub = mask_probs[:xp, :yp]
+          keep_bools = (mask_probs_sub >= probs)
         else:
-          zero_nums = np.sum( batch_data == 0.0 )
-          q = np.random.binomial(1, 1.0 - truly_mis_pro, (zero_nums) )
-          keep_bools = np.zeros_like(batch_data)
-          keep_bools[ np.where(batch_data == 0.0) ] = q
+          if truly_mis_pro <= 0.0:
+            keep_bools = np.zeros_like(batch_data)
+          else:
+            zero_nums = np.sum( batch_data == 0.0 )
+            q = np.random.binomial(1, 1.0 - truly_mis_pro, (zero_nums) )
+            keep_bools = np.zeros_like(batch_data)
+            keep_bools[ np.where(batch_data == 0.0) ] = q
 
-          # keep_bools = ( np.random.randn(*batch_data.shape) < truly_mis_pro )
         keep_bools = np.float32(keep_bools)
 
         if step % config.save_freq_steps != 0:
@@ -337,6 +360,9 @@ class AutoEncoder(object):
           self.writer.add_summary(summary_str, step)
           save_dir = os.path.join(config.checkpoint_dir, self.model_name)
           self.save(session, save_dir, step)
+
+    end = time.clock()
+    print("training {} cost time: {} mins".format(self.model_name, (end - begin) / 60.0))
 
   def predict(self, config):
     dataset = DataSet(config.infer_complete_datapath, batch_size=config.batch_size, onepass=True)
