@@ -248,6 +248,7 @@ class AutoEncoder(object):
     decoder_out = np.reshape(np.concatenate(decoder_out_list, axis=0), (-1, dataset.feature_nums))
     encoder_out = np.reshape(np.concatenate(encoder_out_list, axis=0), (-1, self.feature_num // 32))
     mask_data = np.reshape(np.concatenate(mask_data, axis=0), (-1, dataset.feature_nums))
+
     decoder_out = (1.0 - mask_data) * decoder_out +  dataset.data ##missing value now is completed, other values remain same
     rev_normal_predict_data = data_preprocess.reverse_normalization(decoder_out, config.normal_factor) #reverse normalization
 
@@ -353,13 +354,15 @@ class AutoEncoder(object):
         if step % config.log_freq_steps == 0:
           print("step {}th, loss: {}".format(step, loss))
 
-        if step % config.test_freq_steps == 0:
-          self.predict_tmp(session, step, test_dataset, config)
+        # if step % config.test_freq_steps == 0:
+        #   self.predict_tmp(session, step, test_dataset, config)
 
         if step % config.save_freq_steps == 0:
           self.writer.add_summary(summary_str, step)
           save_dir = os.path.join(config.checkpoint_dir, self.model_name)
           self.save(session, save_dir, step)
+
+      self.predict_tmp(session, steps, test_dataset, config)
 
     end = time.clock()
     print("training {} cost time: {} mins".format(self.model_name, (end - begin) / 60.0))
