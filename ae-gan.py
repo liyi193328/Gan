@@ -1,4 +1,3 @@
-
 # coding: utf-8
 
 import os
@@ -8,22 +7,73 @@ import numpy as np
 import codecs
 import tensorflow as tf
 
+import plot
+import data_preprocess
+from Dataset import DataSet
+
+import keras
+from keras.layers import Input, Dense, Dropout
+from keras.models import Model
+from keras import regularizers
+from keras import constraints
+from keras import backend as K
+from tensorflow.contrib import distributions
+
+import utils
+import shutil
+import time
+from datetime import datetime
 import shutil
 import utils
 import argparse
-import numpy as np
 from scipy.stats import norm
-import tensorflow as tf
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
 import seaborn as sns
 from IPython.display import HTML
-from Dataset import DataSet
-from layers import linear
 
 seed = 42
 np.random.seed(seed)
 tf.set_random_seed(seed)
+
+def linear(input, output_dim, scope=None, stddev=1.0):
+  with tf.variable_scope(scope or 'linear'):
+    w = tf.get_variable(
+      'w',
+      [input.get_shape()[1], output_dim],
+      initializer=tf.random_normal_initializer(stddev=stddev)
+    )
+    b = tf.get_variable(
+      'b',
+      [output_dim],
+      initializer=tf.random_normal_initializer(stddev=stddev)
+    )
+    return tf.matmul(input, w) + b
+
+
+def encoder(input, feature_num, dropout):
+    with tf.variable_scope("encoder"):
+        out = Dense(feature_num // 4, activation="relu")(input)
+        if dropout > 0.0:
+            out = keras.layers.Dropout(dropout)(out)
+        out = Dense(feature_num // 16, activation="relu")(out)
+        out = Dense(feature_num // 32)(out)
+        out = keras.layers.advanced_activations.PReLU(alpha_initializer="zero", weights=None)(out)
+    return out
+
+
+def decoder(input, feature_num, dropout):
+    with tf.variable_scope("decoder") as D:
+        # out = Dropout(0.2)(input)
+        out = Dense(feature_num // 16, activation="relu")(input)
+        out = Dense(feature_num // 4, activation="relu")(out)
+        # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
+
+        if dropout > 0.0:
+            out = keras.layers.Dropout(dropout)(out)
+        out = Dense(self.feature_num, kernel_regularizer=regularizers.l2(0.01))(out)
+        out = keras.layers.advanced_activations.PReLU(weights=None, alpha_initializer="zero")(out)
+    return out
 
 def mlp(input, h_dim):
     init_const = tf.constant_initializer(0.0)
@@ -36,6 +86,7 @@ def mlp(input, h_dim):
     h1 = tf.tanh(tf.matmul(h0, w1) + b1)
     return h1, [w0, b0, w1, b1]
 
+
 def generator(input, h_dim, feature_nums):
     transform, params = mlp(input, h_dim)
     init_const = tf.constant_initializer(0.0)
@@ -47,6 +98,7 @@ def generator(input, h_dim, feature_nums):
     s = tf.tanh(h)
     return s, params + [w, b]
 
+
 def minibatch(input, num_kernels=5, kernel_dim=3):
     x = linear(input, num_kernels * kernel_dim, scope='minibatch', stddev=0.02)
     activation = tf.reshape(x, (-1, num_kernels, kernel_dim))
@@ -55,6 +107,7 @@ def minibatch(input, num_kernels=5, kernel_dim=3):
     abs_diffs = tf.reduce_sum(tf.abs(diffs), 2)
     minibatch_features = tf.reduce_sum(tf.exp(-abs_diffs), 2)
     return tf.concat([input, minibatch_features], 1)
+
 
 '''
 def discriminator(input, h_dim, minibatch_layer=False):
@@ -72,6 +125,7 @@ def discriminator(input, h_dim, minibatch_layer=False):
     return h3
 '''
 
+
 def discriminator(input, h_dim):
     transform, params = mlp(input, h_dim)
     init_const = tf.constant_initializer(0.0)
@@ -85,7 +139,7 @@ def discriminator(input, h_dim):
 
 # In[16]:
 
-def optimizer(loss, var_list, num_decay_steps = 1000):
+def optimizer(loss, var_list, num_decay_steps=1000):
     initial_learning_rate = 0.01
     decay = 0.95
     batch = tf.Variable(0)
@@ -103,7 +157,9 @@ def optimizer(loss, var_list, num_decay_steps = 1000):
     )
     return optimizer
 
+
 anim_frames = []
+
 
 def plot_distributions(GAN, session, loss_d, loss_g):
     num_points = 100000
@@ -131,13 +187,12 @@ def plot_distributions(GAN, session, loss_d, loss_g):
                 (GAN.batch_size, 1)
             )
         })
-           
+
     anim_frames.append((d_sample, ds, gs, loss_d, loss_g))
 
 
-class Gan(object):
-
-    def __init__(self, feature_nums, model_name = "DCGAN.model",mlp_hidden_size=10000, lam=0.1):
+class AEGan(object):
+    def __init__(self, feature_nums, model_name="AEGAN.model", mlp_hidden_size=10000, lam=0.1):
 
         self.feature_nums = feature_nums
         self.log_every = 10
@@ -174,15 +229,17 @@ class Gan(object):
 
         # Define the loss for discriminator and generator networks (see the original
         # paper for details), and create optimizers for both
-        self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D1_logits, labels=tf.ones_like(self.D1_logits)))
-        self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_logits, labels=tf.zeros_like(self.D2_logits)))
+        self.d_loss_real = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D1_logits, labels=tf.ones_like(self.D1_logits)))
+        self.d_loss_fake = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_logits, labels=tf.zeros_like(self.D2_logits)))
 
         self.d_loss_real_sum = tf.summary.scalar("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = tf.summary.scalar("d_loss_fake", self.d_loss_fake)
 
-
         self.loss_d = self.d_loss_real + self.d_loss_fake
-        self.loss_g = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_logits, labels=tf.ones_like(self.D2_logits)))
+        self.loss_g = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D2_logits, labels=tf.ones_like(self.D2_logits)))
 
         self.g_loss_sum = tf.summary.scalar("g_loss", self.loss_g)
         self.d_loss_sum = tf.summary.scalar("d_loss", self.loss_d)
@@ -200,13 +257,13 @@ class Gan(object):
         self.perceptual_loss = self.loss_g
         self.complete_loss = self.contextual_loss + self.lam * self.perceptual_loss
         self.grad_complete_loss = tf.gradients(self.complete_loss, self.z)
-    
+
     def train(self, config):
 
         dataset = DataSet(config.train_datapath, config.batch_size)
 
         steps = dataset.steps * config.epoch
-        samples = np.random.normal(-1, 1,(config.batch_size, self.feature_nums))
+        samples = np.random.normal(-1, 1, (config.batch_size, self.feature_nums))
         sample_dirs = os.path.join("samples", self.model_name)
         if os.path.exists(sample_dirs) == False:
             os.makedirs(sample_dirs)
@@ -226,20 +283,19 @@ class Gan(object):
                 [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
 
             logs_dir = os.path.join("./logs", self.model_name)
-
             if os.path.exists(logs_dir) == False:
                 os.makedirs(logs_dir)
             self.writer = tf.summary.FileWriter(logs_dir, session.graph)
 
             for step in range(steps):
-                
+
                 batch_data = dataset.next()
 
                 sz = len(batch_data)
 
-                random_data = np.random.normal(-1, 1,(sz, self.feature_nums))
+                random_data = np.random.normal(-1, 1, (sz, self.feature_nums))
 
-                loss_d, _ , d_summary_str = session.run([self.loss_d, self.opt_d, self.d_sum], {
+                loss_d, _, d_summary_str = session.run([self.loss_d, self.opt_d, self.d_sum], {
                     self.x: batch_data,
                     self.z: random_data
                 })
@@ -247,7 +303,7 @@ class Gan(object):
                 self.writer.add_summary(d_summary_str, steps)
 
                 # update generator
-                loss_g, _ , g_summary_str = session.run([self.loss_g, self.opt_g, self.g_sum], {
+                loss_g, _, g_summary_str = session.run([self.loss_g, self.opt_g, self.g_sum], {
                     self.z: random_data
                 })
                 self.writer.add_summary(g_summary_str, step)
@@ -265,7 +321,6 @@ class Gan(object):
                 if step % config.save_freq_steps == 0:
                     save_dir = os.path.join(config.checkpoint_dir, self.model_name)
                     self.save(session, save_dir, step)
-
 
     def complete(self, config):
 
@@ -287,7 +342,7 @@ class Gan(object):
             except:
                 tf.initialize_all_variables().run()
 
-            while(1):
+            while (1):
                 batch_data = dataset.next()
                 if batch_data is None:
                     break
@@ -332,15 +387,15 @@ class Gan(object):
                         v_old = np.copy(v)
 
                         for steps in range(config.hmcL):
-                            v -= config.hmcEps/2 * config.hmcBeta * g[0]
+                            v -= config.hmcEps / 2 * config.hmcBeta * g[0]
                             zhats += config.hmcEps * v
                             np.copyto(zhats, np.clip(zhats, -1, 1))
                             loss, g, _, _ = sess.run(run, feed_dict=fd)
-                            v -= config.hmcEps/2 * config.hmcBeta * g[0]
+                            v -= config.hmcEps / 2 * config.hmcBeta * g[0]
 
                         for i in range(sample_size):
-                            logprob_old = config.hmcBeta * loss_old[i] + np.sum(v_old[i]**2)/2
-                            logprob = config.hmcBeta * loss[i] + np.sum(v[i]**2)/2
+                            logprob_old = config.hmcBeta * loss_old[i] + np.sum(v_old[i] ** 2) / 2
+                            logprob = config.hmcBeta * loss[i] + np.sum(v[i] ** 2) / 2
                             accept = np.exp(logprob_old - logprob)
                             if accept < 1 and np.random.uniform() > accept:
                                 np.copyto(zhats[i], zhats_old[i])
@@ -351,7 +406,7 @@ class Gan(object):
                 completed = mask_data + inv_masked_hat_data
                 complete_datas.append(completed)
 
-        complete_datas = np.reshape(np.concatenate(complete_datas,axis=0), (-1, feature_nums))
+        complete_datas = np.reshape(np.concatenate(complete_datas, axis=0), (-1, feature_nums))
         df = pd.DataFrame(complete_datas)
         if os.path.exists(config.outDir) == False:
             os.makedirs(config.outDir)

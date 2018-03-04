@@ -12,9 +12,7 @@ import tensorflow as tf
 
 import utils
 import argparse
-import numpy as np
 from scipy.stats import norm
-import tensorflow as tf
 from Dataset import DataSet
 from gan import Gan
 from autoencoder import AutoEncoder
@@ -25,7 +23,7 @@ model_class_dict = {
 }
 
 flags = tf.app.flags
-flags.DEFINE_integer("epoch", 50, "Epoch to train [25]")
+flags.DEFINE_integer("epoch", 200, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_string("model_class", "autoencoder", "model class[autoencoder|gan]")
@@ -64,3 +62,4 @@ feature_nums = FLAGS.feature_nums or sample_dataset.feature_nums
 
 model = model_class(feature_nums, model_name=FLAGS.model_name, dropout= FLAGS.dropout, truly_mis_pro=FLAGS.truly_mis_pro)
 model.train(FLAGS)
+

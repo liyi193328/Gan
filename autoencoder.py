@@ -18,28 +18,28 @@ from keras import backend as K
 from tensorflow.contrib import distributions
 
 import utils
-import layers
+from layers import *
 import shutil
 import time
 from datetime import datetime
 
 activation_dict = {
-  "tanh":tf.tanh,
-  "sigmoid": tf.sigmoid,
-  "relu": tf.nn.relu
+"tanh":tf.tanh,
+"sigmoid": tf.sigmoid,
+"relu": tf.nn.relu
 }
 
 class AutoEncoder(object):
 
   def __init__(self, feature_num, hidden_size=None, dropout = None,
-               learing_rate=0.001, activation="relu", model_name="auto_encoder", **kwargs):
+               learning_rate=0.001, activation="relu", model_name="auto_encoder", **kwargs):
 
     self.feature_num = feature_num
     if hidden_size is None:
       hidden_size = feature_num // 3
     self.hidden_size = hidden_size
     self.activation = activation_dict[activation]
-    self.learning_rate = learing_rate
+    self.learning_rate = learning_rate
     self.model_name = model_name
     self.create_conf = kwargs
     self.dropout = dropout
@@ -47,12 +47,17 @@ class AutoEncoder(object):
 
   def _create_model(self):
     # tf Graph input (only pictures)
+    self.is_training = tf.placeholder(tf.bool, name="is_training")
     self.X = tf.placeholder(tf.float32, [None, self.feature_num], name="X")
     self.mask = tf.placeholder(tf.float32, [None, self.feature_num], name="mask")
     self.keep_bools = tf.placeholder(tf.float32, [None, self.feature_num], name="keep_bools")
 
-    self.encoder_out = self.encoder(self.X) #through activation
-    self.decoder_out = self.decoder(self.encoder_out)  #must not through activation
+    # self.encoder_out = self.encoder(self.X)  # through activation
+    # self.decoder_out = self.decoder(self.encoder_out)  # must not through activation
+
+
+    self.encoder_out = self.encoder_bn(self.X) #through activation
+    self.decoder_out = self.decoder_bn(self.encoder_out)  #must not through activation
 
     origin_nums = tf.reduce_sum(self.mask)
 
@@ -73,6 +78,7 @@ class AutoEncoder(object):
     tf.summary.scalar("cal_loss_zeros_nums", total_valid_nums - origin_nums)
     tf.summary.scalar("origin_valid_nums", origin_nums)
     tf.summary.scalar("total_valid_nums", total_valid_nums)
+
 
     # # ##cross entropy
     # entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.X, logits=mask_decoder_out, name="loss")
@@ -109,6 +115,13 @@ class AutoEncoder(object):
     self.merged_summary_op = tf.summary.merge_all()
 
     self.saver = tf.train.Saver(max_to_keep=1)
+
+    '''
+      `max_to_keep` indicates the maximum number of recent checkpoint files to
+      keep.  As new files are created, older files are deleted.  If None or 0,
+      all checkpoint files are kept.  Defaults to 5 (that is, the 5 most recent
+      checkpoint files are kept.)
+    '''
 
   def encoder(self, input):
 
@@ -150,6 +163,50 @@ class AutoEncoder(object):
       #(None, fe // 9) -> (None, fe // 3) -> (None, fe)
     return out
 
+  def encoder_bn(self, input):
+    with tf.variable_scope("encoder_bn"):
+      out = Dense(self.feature_num // 4, activation="linear")(input)
+      out = batch_norm(out, is_training=self.is_training)
+      out = keras.layers.activations.relu(out)
+      if self.dropout < 1.0:
+        out = keras.layers.Dropout(self.dropout)(out)
+      out = Dense(self.feature_num // 16, activation="linear")(out)
+      out = batch_norm(out, is_training=self.is_training)
+      out = keras.layers.activations.relu(out)
+      out = Dense(self.feature_num // 32, activation="linear")(out)
+      out = batch_norm(out, is_training=self.is_training)
+      out = keras.layers.advanced_activations.PReLU(alpha_initializer="zero", weights=None)(out)
+
+      # out = layers.linear(input, self.hidden_size, scope="enc_first_layer")
+      # out = layers.linear(out, self.hidden_size // 3, scope="enc_second_layer")
+      # out = self.activation(out)
+
+      # (None, fe) -> (None, fe // 3) -> tanh -> (None, fe // 9) -> tanh
+    return out
+
+  def decoder_bn(self, input):
+    with tf.variable_scope("decoder_bn"):
+      # out = Dropout(0.2)(input)
+      out = Dense(self.feature_num // 16, activation="linear")(input)
+      out = batch_norm(out, is_training=self.is_training)
+      out = keras.layers.activations.relu(out)
+      out = Dense(self.feature_num // 4, activation="linear")(out)
+      out = batch_norm(out, is_training=self.is_training)
+      out = keras.layers.activations.relu(out)
+      # out = Dense(self.feature_num, kernel_constraint=constraints.non_neg, bias_constraint=constraints.non_neg)(out)
+
+      if self.dropout < 1.0:
+        out = keras.layers.Dropout(self.dropout)(out)
+      out = Dense(self.feature_num, activation="linear", kernel_regularizer=regularizers.l2(0.01))(out)
+      out = batch_norm(out, is_training=self.is_training)
+      out = keras.layers.advanced_activations.PReLU(weights=None, alpha_initializer="zero")(out)
+
+      # out = layers.linear(input, self.feature_num, scope="dec_first_layer")
+      # out = layers.linear(out, self.feature_num, scope="dec_second_layer")
+      # out = self.activation(out)
+
+      # (None, fe // 9) -> (None, fe // 3) -> (None, fe)
+    return out
 
   def train_test_mnist(self, config):
 
@@ -241,8 +298,10 @@ class AutoEncoder(object):
       mask_data.append(mask)
       keep_bools = np.float32( np.zeros_like(batch_data) )
 
-      decoder_out, encoder_out = sess.run([self.decoder_out, self.encoder_out], feed_dict={self.X: batch_data, self.mask: mask, self.keep_bools: keep_bools,
-                                                       K.learning_phase(): 0})
+      decoder_out, encoder_out = sess.run([self.decoder_out, self.encoder_out], feed_dict={self.X: batch_data, self.mask: mask,
+                                                                                           self.is_training:False,self.keep_bools:
+                                                                                             keep_bools,
+                                                                              K.learning_phase(): 0})
       decoder_out_list.append(decoder_out)
       encoder_out_list.append(encoder_out)
     decoder_out = np.reshape(np.concatenate(decoder_out_list, axis=0), (-1, dataset.feature_nums))
@@ -299,7 +358,7 @@ class AutoEncoder(object):
 
       load_model_dir = os.path.join(config.checkpoint_dir, self.model_name)
       if config.load_checkpoint and os.path.exists(load_model_dir):
-        self.load(session, config.checkpoint_dir)
+        self.load(session, load_model_dir)
       elif os.path.exists(load_model_dir):
         shutil.rmtree(load_model_dir)
 
@@ -342,11 +401,11 @@ class AutoEncoder(object):
         if step % config.save_freq_steps != 0:
           _, loss = session.run( [self.apply_grads, self.loss],
                                            feed_dict={ self.X: batch_data, self.mask: mask, self.keep_bools: keep_bools,
-                                                      K.learning_phase(): 1})
+                                                       self.is_training: True,K.learning_phase(): 1})
         else:
           _, summary_str, loss = session.run( [self.apply_grads, self.merged_summary_op, self.loss],
                                              feed_dict={ self.X: batch_data, self.mask: mask,
-                                                         self.keep_bools: keep_bools,
+                                                         self.keep_bools: keep_bools, self.is_training:True,
                                                         K.learning_phase(): 1
                                                          }
                                               )
@@ -368,23 +427,23 @@ class AutoEncoder(object):
     print("training {} cost time: {} mins".format(self.model_name, (end - begin) / 60.0))
 
   def predict(self, config):
-    dataset = DataSet(config.infer_complete_datapath, batch_size=config.batch_size, onepass=True)
+    dataset = DataSet(config.infer_complete_datapath, batch_size=config.batch_size,shuffle=False, onepass=True)
     predict_data = []
     with tf.Session() as sess:
       load_model_dir = os.path.join(config.checkpoint_dir, self.model_name)
       isLoaded = self.load(sess, load_model_dir)
       assert (isLoaded)
-      try:
-        tf.global_variables_initializer().run()
-      except:
-        tf.initialize_all_variables().run()
+      # try:
+      #   tf.global_variables_initializer().run()
+      # except:
+      #   tf.initialize_all_variables().run()
       while (1):
         batch_data = dataset.next()
         if batch_data is None:
           break
         mask = (batch_data > 0.0)
         mask = np.float32(mask)
-        predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, K.learning_phase(): 0})
+        predicts = sess.run(self.decoder_out, feed_dict={self.X: batch_data, self.mask: mask, self.is_training:False, K.learning_phase(): 0})
         predict_data.append(predicts)
     predict_data = np.reshape(np.concatenate(predict_data, axis=0), (-1, dataset.feature_nums))
     df = pd.DataFrame(predict_data, columns=dataset.columns)
